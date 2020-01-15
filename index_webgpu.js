@@ -56,6 +56,19 @@ const bindPage = async () => {
     c.print();
   }
 
+  {
+    const f = (a, b) => a.add(b);
+    // df / da = b, df / db = a
+    const g = tf.grads(f);
+    const a = tf.randomNormal([500]);
+    const b = tf.randomNormal([500]);
+    const [da, db] = g([a, b]);
+    console.log('da');
+    da.print();
+    console.log('db');
+    db.print();
+  }
+
 }
 
 bindPage();
