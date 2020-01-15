@@ -49,6 +49,13 @@ const bindPage = async () => {
     c.print();
   }
 
+  {
+    const a = tf.randomNormal([500,1]);
+    const b = tf.randomNormal([500,1]);
+    const c = a.mul(b);
+    c.print();
+  }
+
 }
 
 bindPage();
