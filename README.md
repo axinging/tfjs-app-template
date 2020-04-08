@@ -1,4 +1,4 @@
-# Handtrack demo
+# TFJS app demo
 
 ## Contents
 
