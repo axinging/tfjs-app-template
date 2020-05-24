@@ -22,11 +22,43 @@ import * as tf from '@tensorflow/tfjs-core';
 
 tf.ENV.set('DEBUG',true);
 
+function generateCaseInputs(totalSizeTensor, totalSizeFilter) {
+  const inp = new Array(totalSizeTensor);
+  const filt = new Array(totalSizeFilter);
+
+  for (let i = 0; i < totalSizeTensor; i++) {
+    inp[i] = i;
+  }
+  for (let i = 0; i < totalSizeFilter; i++) {
+    filt[i] = i;
+  }
+
+  return {input: inp, filter: filt};
+}
+
 /**
  * Start the demo.
  */
 const bindPage = async () => {
-  //await tf.ready();
+  // await tf.ready();
+  const width = 4;
+  const height = 8;
+  const inputDepth = 1;
+  const inputShape = [1, width, height, inputDepth];
+  const outputDepth = 1;
+  const fSize = 3;
+  const pad = 'valid';
+  const stride = [1, 1];
+
+  const inputs = generateCaseInputs(1 * width * height * inputDepth, fSize * fSize);
+  const x = tf.tensor4d(inputs.input, inputShape);
+  const w =
+      tf.tensor4d(inputs.filter, [fSize, fSize, inputDepth, outputDepth]);
+
+  const result = tf.conv2d(x, w, stride, pad);
+  console.log(await result.data());
+
+  /*
   // f(a, b) = a * b
   const f = (a, b) => a.mul(b);
   // df / da = b, df / db = a
@@ -39,7 +71,7 @@ const bindPage = async () => {
   da.print();
   console.log('db');
   db.print();
-
+  */
 }
 
 bindPage();
