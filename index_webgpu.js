@@ -15,7 +15,6 @@
  * =============================================================================
  */
 
-import * as handtrack from '@tensorflow-models/handtrack';
 import * as tfwebgpu from '@tensorflow/tfjs-backend-webgpu';
 import * as tf from '@tensorflow/tfjs-core';
 
@@ -67,6 +66,17 @@ const bindPage = async () => {
     da.print();
     console.log('db');
     db.print();
+  }
+  {
+    const pixels = new ImageData(1, 1);
+    pixels.data[0] = 0;
+    pixels.data[1] = 80;
+    pixels.data[2] = 160;
+    pixels.data[3] = 240;
+
+    const array = tf.browser.fromPixels(pixels, 4);
+    console.log("from Pixel: ");
+    array.print(); 
   }
 
 }

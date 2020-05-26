@@ -9,10 +9,13 @@
     "node": ">=8.9.0"
   },
   "dependencies": {
-    "@tensorflow/tfjs-core": "^1.3.5",
-    "@tensorflow/tfjs-converter": "^1.3.5"
+    "@tensorflow/tfjs-backend-webgpu": "^0.0.1-alpha.0",
+    "@tensorflow/tfjs-converter": "^1.3.5",
+    "@tensorflow/tfjs-core": "1.2.1"
   },
   "scripts": {
+    "watchcamera": "cross-env NODE_ENV=development parcel index_camera.html --no-hmr ",
+    "buildcamera": "cross-env NODE_ENV=production parcel build index_camera.html --public-url ./",
     "watch": "cross-env NODE_ENV=development parcel index.html --no-hmr ",
     "build": "cross-env NODE_ENV=production parcel build index.html --public-url ./",
     "lint": "eslint ."

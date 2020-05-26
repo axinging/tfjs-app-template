@@ -4,15 +4,17 @@
 
 This demo shows how to use the the tfjs operators.
 
-## Setup
+## General
 
-cd into the demos folder:
 ```sh
 yarn & yarn build
+yarn watch
 ```
 
-To watch files for changes, and launch a dev server:
+
+## Camera
 
 ```sh
-yarn watch
+yarn & yarn buildcamera
+yarn watchcamera
 ```
