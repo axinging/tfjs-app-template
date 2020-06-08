@@ -36,11 +36,27 @@ function generateCaseInputs(totalSizeTensor, totalSizeFilter) {
   return {input: inp, filter: filt};
 }
 
+const state = {
+  backend: 'webgl'
+};
+
+function setupDatGui() {
+  const gui = new dat.GUI();
+  gui.add(state, 'backend', ['wasm', 'webgl', 'cpu', 'webgpu'])
+      .onChange(async backend => {
+        await tf.setBackend(backend);
+      });
+}
+
 /**
  * Start the demo.
  */
 const bindPage = async () => {
   // await tf.ready();
+  setupDatGui();
+  await tf.setBackend(state.backend);
+  tf.ENV.set('WEBGL_CONV_IM2COL', false);
+  // tf.env().set('WEBGL_CONV_IM2COL', false);
   const width = 4;
   const height = 8;
   const inputDepth = 1;

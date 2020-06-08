@@ -146,7 +146,7 @@ async function loadVideo() {
 
 const main =
     async () => {
-  // await tf.setBackend(state.backend);
+  await tf.setBackend(state.backend);
   await tf.ready();
   // model = await handpose.load();
   let video;
