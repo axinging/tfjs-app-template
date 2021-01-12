@@ -1,20 +1,12 @@
-# TFJS app demo
+# WebGPU JavaScript demo
 
 ## Contents
 
-This demo shows how to use the the tfjs operators.
+This demo shows how to use the webgpu with JavaScript(No TypeScript).
 
 ## General
 
 ```sh
 yarn & yarn build
 yarn watch
-```
-
-
-## Camera
-
-```sh
-yarn & yarn buildcamera
-yarn watchcamera
 ```
