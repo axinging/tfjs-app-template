@@ -27,6 +27,6 @@ void main() {
   }
 
   int index = resultCell.y + resultCell.x * int(secondMatrix.size.y);
-  resultMatrix.numbers[index] = result;
+  resultMatrix.numbers[index] = NAN;
 }
 `;
