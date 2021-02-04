@@ -1,18 +1,29 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <title>Get started with GPU Compute on the Web - Sample #2</title>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="script.js"></script>
-  </head>  
-  <body>
-    <h1>Get started with GPU Compute on the Web</h1>
-    <h2>Sample - Matrix multiplication</h2>
-    <p>Instructions: Check out DevTools JavaScript console.</p>
-    <a href="https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web">Source</a>
-    <div class="glitchButton" style="position:fixed;top:20px;right:20px;"></div>
-    <script src="https://button.glitch.me/button.js"></script>
-  </body>
+<html>
+
+<body>
+  <h2 id="test-it">Test it</h2>
+  <p>Click the inner square to trigger a click event:</p>
+  <style>
+    .outer-test {
+      background: #D4D4D4;
+      padding: 25px;
+      width: 92px;
+      margin: 0 auto;
+    }
+
+    .inner-test {
+      background: #ADADAD;
+      padding: 46px;
+      width: 0;
+    }
+  </style>
+
+  <div class="outer-test">
+    <div class="inner-test"></div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+
+  <script src="./script.js"></script>
+</body>
+
 </html>
