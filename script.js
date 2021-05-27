@@ -1,6 +1,6 @@
 // https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
-//import glslangModule from "https://unpkg.com/@webgpu/glslang@0.0.8/dist/web-devel/glslang.js";
-import glslangInit from '@webgpu/glslang/dist/web-devel/glslang.onefile';
+import glslangInit from "https://unpkg.com/@webgpu/glslang@0.0.8/dist/web-devel/glslang.js";
+//import glslangInit from '@webgpu/glslang/dist/web-devel/glslang.onefile';
 import {computeShaderCode} from './shader.js';
 (async () => {
   if (!navigator.gpu) {
@@ -81,17 +81,17 @@ import {computeShaderCode} from './shader.js';
       {
         binding: 0,
         visibility: GPUShaderStage.COMPUTE,
-        type: "readonly-storage-buffer"
+        buffer: {type: 'read-only-storage'}
       },
       {
         binding: 1,
         visibility: GPUShaderStage.COMPUTE,
-        type: "readonly-storage-buffer"
+        buffer: {type: 'read-only-storage'}
       },
       {
         binding: 2,
         visibility: GPUShaderStage.COMPUTE,
-        type: "storage-buffer"
+        buffer: {type: 'storage'}
       }
     ]
   });
@@ -165,7 +165,7 @@ import {computeShaderCode} from './shader.js';
 
   // Submit GPU commands.
   const gpuCommands = commandEncoder.finish();
-  device.defaultQueue.submit([gpuCommands]);
+  device.queue.submit([gpuCommands]);
 
   // TODO(memoryleak): below is successful.
   resultMatrixBuffer.destroy();
