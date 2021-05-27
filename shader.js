@@ -1,4 +1,14 @@
 export const computeShaderCode = `#version 450
+//
+bool isnan_custom(float val) {
+  return (val > 0.0 || val < 0.0) ? false : val != 0.0;
+}
+bvec4 isnan_custom(vec4 val) {
+  return bvec4(isnan_custom(val.x),
+    isnan_custom(val.y), isnan_custom(val.z), isnan_custom(val.w));
+}
+#define isnan(value) isnan_custom(value)
+//
 
 layout(std430, set = 0, binding = 0) readonly buffer FirstMatrix {
     float numbers[];
@@ -18,6 +28,11 @@ layout(std140, set = 0, binding = 3) uniform Uniforms {
 
 void main() {
   int index = int(gl_GlobalInvocationID.x);
-  resultMatrix.numbers[index] = firstMatrix.numbers[index] + secondMatrix.numbers[index];
+  if(isnan(NAN)) {
+    resultMatrix.numbers[index] = NAN;
+  } else {
+    resultMatrix.numbers[index] = firstMatrix.numbers[index] + secondMatrix.numbers[index];
+  }
+
 }
 `;
