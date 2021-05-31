@@ -8,13 +8,153 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script type='module'>
     // https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
-    import glslangInit from "https://unpkg.com/@webgpu/glslang@0.0.8/dist/web-devel/glslang.js";
-    //import glslangInit from '@webgpu/glslang/dist/web-devel/glslang.onefile';
+    import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.8/dist/web-devel/glslang.js';
+    // import glslangInit from '@webgpu/glslang/dist/web-devel/glslang.onefile';
+
+    function acquireBuffer(device, byteSize, usage) {
+      const newBuffer = device.createBuffer({ size: byteSize, usage: usage });
+      return newBuffer;
+    }
+
+    function arrayToDataView(arrays, length) {
+      const BYTES_PER_ELEMENT = 4;
+      const uniformDataView =
+        new DataView(new ArrayBuffer(length * BYTES_PER_ELEMENT));
+
+      let dataViewIndex = 0;
+      arrays.forEach(array => {
+        const arrayData = array.data;
+
+        if (array.type !== 'int32' && array.type !== 'float32') {
+          throw new Error(`${array.type} not supported!`);
+        }
+
+        if (array.type === 'int32') {
+          arrayData.forEach(d => {
+            uniformDataView.setInt32(dataViewIndex * BYTES_PER_ELEMENT, d, true);
+            dataViewIndex++;
+          });
+        } else {
+          arrayData.forEach(d => {
+            uniformDataView.setFloat32(dataViewIndex * BYTES_PER_ELEMENT, d, true);
+            dataViewIndex++;
+          });
+        }
+      });
+
+      return uniformDataView;
+    }
+
+    function computePadding(uniformsWithType) {
+      let currentOffset = 0;
+      let padding = 0;
+      let dataViewIndex = 0;
+      const dimUniformsData = [];
+      uniformsWithType.forEach((d, i) => {
+        if (d.data.length === 0) {
+          d.data = [1];
+        }
+        // Complete std140 layout rules are documented here:
+        // tslint:disable-next-line:max-line-length
+        // https://www.khronos.org/registry/OpenGL/specs/gl/glspec45.core.pdf#page=159
+        let baseAlignment;
+        switch (d.data.length) {
+          case 0:
+            baseAlignment = 1;
+            break;
+          case 1:
+            baseAlignment = 1;
+            break;
+          case 2:
+            baseAlignment = 2;
+            break;
+          case 3:
+            baseAlignment = 4;
+            break;
+          case 4:
+            baseAlignment = 4;
+            break;
+          default:
+            util.assert(false, () => `Unsupported ${d.data.length}D shape`);
+        }
+
+        padding = Math.ceil(currentOffset / baseAlignment) * baseAlignment -
+          currentOffset;
+        for (let p = 0; p < padding; ++p) {
+          dimUniformsData.push({ type: 'int32', data: [0] });
+          dataViewIndex++;
+        }
+        dimUniformsData.push({ type: d.type, data: d.data });
+        dataViewIndex = dataViewIndex + d.data.length;
+        currentOffset += d.data.length + padding;
+      });
+
+      return arrayToDataView(dimUniformsData, dataViewIndex);
+    }
+
+
+    function makeUniformsDataView(device, sizeA, sizeB) {
+      let uniformsWithType = [{ type: 'float32', data: [NaN] }];
+      uniformsWithType.push({ type: 'int32', data: [sizeA, sizeB] });
+      const uniformsDataView = computePadding(uniformsWithType);
+
+      const dimensionsBuffer = device.createBuffer({
+        size: uniformsDataView.byteLength,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
+      });
+      device.queue.writeBuffer(dimensionsBuffer, 0, uniformsDataView);
+
+      return {
+        offset: 0,
+        size: uniformsDataView.byteLength,
+        buffer: dimensionsBuffer
+      };
+    }
+
+    const computeShaderCode = `#version 450
+/*
+bool isnan_custom(float val) {
+  return (val > 0.0 || val < 0.0) ? false : val != 0.0;
+}
+bvec4 isnan_custom(vec4 val) {
+  return bvec4(isnan_custom(val.x),
+    isnan_custom(val.y), isnan_custom(val.z), isnan_custom(val.w));
+}
+#define isnan(value) isnan_custom(value)
+*/
+
+layout(std430, set = 0, binding = 0) readonly buffer FirstMatrix {
+    float numbers[];
+} firstMatrix;
+
+layout(std430, set = 0, binding = 1) readonly buffer SecondMatrix {
+    float numbers[];
+} secondMatrix;
+
+layout(std430, set = 0, binding = 2) buffer ResultMatrix {
+    float numbers[];
+} resultMatrix;
+
+layout(std140, set = 0, binding = 3) uniform Uniforms {
+  float NAN; int sizeA; int sizeB; 
+};
+
+void main() {
+  int index = int(gl_GlobalInvocationID.x);
+  if(isnan(firstMatrix.numbers[index])) {
+    resultMatrix.numbers[index] = NAN;
+  } else {
+    resultMatrix.numbers[index] = firstMatrix.numbers[index] + secondMatrix.numbers[index];
+  }
+
+}
+`;
+
+
     (async () => {
       if (!navigator.gpu) {
         console.log(
-          "WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag."
-        );
+          'WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag.');
         return;
       }
 
@@ -22,51 +162,8 @@
       const device = await adapter.requestDevice();
 
       // First Matrix
-      const computeShaderCode = `#version 450
 
-layout(std430, set = 0, binding = 0) readonly buffer FirstMatrix {
-    vec2 size;
-    float numbers[];
-} firstMatrix;
-
-layout(std430, set = 0, binding = 1) readonly buffer SecondMatrix {
-    vec2 size;
-    float numbers[];
-} secondMatrix;
-
-layout(std430, set = 0, binding = 2) buffer ResultMatrix {
-    vec2 size;
-    float numbers[];
-} resultMatrix;
-
-void main() {
-  resultMatrix.size = vec2(firstMatrix.size.x, secondMatrix.size.y);
-
-  ivec2 resultCell = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-  float result = 0.0;
-  for (int i = 0; i < firstMatrix.size.y; i++) {
-    int a = i + resultCell.x * int(firstMatrix.size.y);
-    int b = resultCell.y + i * int(secondMatrix.size.y);
-    result += firstMatrix.numbers[a] * secondMatrix.numbers[b];
-  }
-
-  int index = resultCell.y + resultCell.x * int(secondMatrix.size.y);
-  resultMatrix.numbers[index] = result;
-}
-`;
-
-      const firstMatrix = new Float32Array([
-        2 /* rows */,
-        4 /* columns */,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8
-      ]);
+      const firstMatrix = new Float32Array([1, 2, 3, 4, 5, 6, 7, NaN]);
 
       const gpuBufferFirstMatrix = device.createBuffer({
         mappedAtCreation: true,
@@ -81,18 +178,7 @@ void main() {
 
       // Second Matrix
 
-      const secondMatrix = new Float32Array([
-        4 /* rows */,
-        2 /* columns */,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8
-      ]);
+      const secondMatrix = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
 
       const gpuBufferSecondMatrix = device.createBuffer({
         mappedAtCreation: true,
@@ -106,13 +192,17 @@ void main() {
       // gpuBufferSecondMatrix.destroy();
 
       // Result Matrix
-
+      const sizeA = 2;
+      const sizeB = 4;
       const resultMatrixBufferSize =
-        Float32Array.BYTES_PER_ELEMENT * (2 + firstMatrix[0] * secondMatrix[1]);
+        Float32Array.BYTES_PER_ELEMENT * (sizeA * sizeB);
       const resultMatrixBuffer = device.createBuffer({
         size: resultMatrixBufferSize,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
       });
+
+
+      const uniformBuffer = makeUniformsDataView(device, sizeA, sizeB);
 
       // Bind group layout and bind group
 
@@ -132,6 +222,11 @@ void main() {
             binding: 2,
             visibility: GPUShaderStage.COMPUTE,
             buffer: { type: 'storage' }
+          },
+          {
+            binding: 3,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: 'uniform' }
           }
         ]
       });
@@ -139,24 +234,10 @@ void main() {
       const bindGroup = device.createBindGroup({
         layout: bindGroupLayout,
         entries: [
-          {
-            binding: 0,
-            resource: {
-              buffer: gpuBufferFirstMatrix
-            }
-          },
-          {
-            binding: 1,
-            resource: {
-              buffer: gpuBufferSecondMatrix
-            }
-          },
-          {
-            binding: 2,
-            resource: {
-              buffer: resultMatrixBuffer
-            }
-          }
+          { binding: 0, resource: { buffer: gpuBufferFirstMatrix } },
+          { binding: 1, resource: { buffer: gpuBufferSecondMatrix } },
+          { binding: 2, resource: { buffer: resultMatrixBuffer } },
+          { binding: 3, resource: { buffer: uniformBuffer.buffer } }
         ]
       });
 
@@ -167,14 +248,11 @@ void main() {
       const glslang = await glslangInit();
 
       const computePipeline = device.createComputePipeline({
-        layout: device.createPipelineLayout({
-          bindGroupLayouts: [bindGroupLayout]
-        }),
+        layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
         computeStage: {
-          module: device.createShaderModule({
-            code: glslang.compileGLSL(computeShaderCode, "compute")
-          }),
-          entryPoint: "main"
+          module: device.createShaderModule(
+            { code: glslang.compileGLSL(computeShaderCode, 'compute') }),
+          entryPoint: 'main'
         }
       });
 
@@ -185,7 +263,7 @@ void main() {
       const passEncoder = commandEncoder.beginComputePass();
       passEncoder.setPipeline(computePipeline);
       passEncoder.setBindGroup(0, bindGroup);
-      passEncoder.dispatch(firstMatrix[0] /* x */, secondMatrix[1] /* y */);
+      passEncoder.dispatch(sizeA * sizeB /* x */, 1 /* y */);
       passEncoder.endPass();
 
       // Get a GPU buffer for reading in an unmapped state.
@@ -196,10 +274,8 @@ void main() {
 
       // Encode commands for copying buffer to buffer.
       commandEncoder.copyBufferToBuffer(
-        resultMatrixBuffer /* source buffer */,
-        0 /* source offset */,
-        gpuReadBuffer /* destination buffer */,
-        0 /* destination offset */,
+        resultMatrixBuffer /* source buffer */, 0 /* source offset */,
+        gpuReadBuffer /* destination buffer */, 0 /* destination offset */,
         resultMatrixBufferSize /* size */
       );
 
@@ -215,6 +291,7 @@ void main() {
       const arrayBuffer = gpuReadBuffer.getMappedRange();
       console.log(new Float32Array(arrayBuffer));
     })();
+
 
   </script>
 </head>

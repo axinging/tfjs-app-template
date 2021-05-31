@@ -116,7 +116,7 @@ function makeUniformsDataView(device, sizeA, sizeB) {
 
   // First Matrix
 
-  const firstMatrix = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
+  const firstMatrix = new Float32Array([1, 2, 3, 4, 5, 6, 7, NaN]);
 
   const gpuBufferFirstMatrix = device.createBuffer({
     mappedAtCreation: true,
