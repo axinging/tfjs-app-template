@@ -52,12 +52,22 @@ export const computeShaderCode = `
     [[group(0), binding(2)]] var<storage> resultMatrix : [[access(write)]] Matrix;
     [[group(0), binding(3)]] var<uniform> uniforms : Uniforms;
 
-    // let sizeA : u32 = uniforms.size[0]; // This not work!
+    // let sizeA : u32 = uniforms.size[0]; // Not work ! uniforms can not be used as global.
+    // let gidx : vec3<u32> = global_invocation_id;
 
-    [[stage(compute)]] fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
+    // let TileSize : u32 = 4;
+
+    var<workgroup> mm_Asub : array<f32, 4>;
+    // wg_size not work!
+    // [[builtin(workgroup_size)]] wg_size : vec3<u32>
+    // resultMatrix.numbers[index] = f32(wg_size.x);
+
+    [[stage(compute), workgroup_size(16, 16, 1)]]
+    fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
       let index : u32 = global_id.x;
       var result : f32 = firstMatrix.numbers[index] + secondMatrix.numbers[index];
       let sizeA : u32 = uniforms.size[0];
-      resultMatrix.numbers[index] = f32(sizeA); //f32(uniforms.size[0]);
+      resultMatrix.numbers[index] = f32(global_id.x); //f32(uniforms.size[0]);
+
     }
 `;
