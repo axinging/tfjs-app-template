@@ -58,8 +58,38 @@ export const computeShaderCode = `
       return dot(a, b);
     }
 
+    fn dottestu32(a: vec2<u32>, b : vec2<u32>) ->f32 {
+      return dot(a, b);
+    }
+
     fn dottest4(a: vec4<f32>, b : vec4<f32>) ->f32 {
       return dot(a, b);
+    }
+    // error: cannot assign to value of type 'u32'
+    fn inputVar(index: u32) ->u32 {
+       index = index - 3u;
+       let a : u32 = index;
+       return a;
+    }
+
+    fn inputVar2(index: u32) ->u32 {
+      var index2 : u32 = index - 3u;
+      let a : u32 = index2;
+      return a;
+    }
+
+    fn conditionExpr() -> i32{
+      let a : i32 = 2;
+      let b : i32 = 3;
+      let c : i32 = 0;
+      // let d : i32 = c > 0 ? a : b; 
+      var d : i32;
+      if (c > 0) {
+        d = a;
+      } else {
+        d = b;
+      }
+      return d;
     }
 
     // float NAN; int sizeA; int sizeB;
