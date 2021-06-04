@@ -37,6 +37,31 @@ export const computeShaderCode = `
           all(coord < shape);
     }
 
+    fn getFlatIndex(coord : u32, shape : u32) -> u32 {
+      return coord;
+    }
+
+    fn getFlatIndex2(coords : vec2<u32>, shape : vec2<u32>) -> u32 {
+      return u32(dot(vec2<f32>(coords), vec2<f32>(f32(shape.y), 1.0)));
+    }
+
+    fn getFlatIndex3(coords : vec3<u32>, shape : vec3<u32>) -> u32 {
+      return u32(dot(vec3<f32>(coords), vec3<f32>(f32(shape.y) * f32(shape.z), f32(shape.z), 1.0)));
+    }
+
+    fn getFlatIndex4(coords : vec4<u32>, shape : vec4<u32>) -> u32 {
+      return u32(dot(vec4<f32>(coords), vec4<f32>(
+          f32(shape.y) * f32(shape.z) * f32(shape.w), f32(shape.z) * f32(shape.w), f32(shape.w), 1.0)));
+    }
+
+    fn dottest(a: vec2<f32>, b : vec2<f32>) ->f32 {
+      return dot(a, b);
+    }
+
+    fn dottest4(a: vec4<f32>, b : vec4<f32>) ->f32 {
+      return dot(a, b);
+    }
+
     // float NAN; int sizeA; int sizeB;
     [[block]] struct Uniforms {
       NAN : f32;
@@ -67,7 +92,8 @@ export const computeShaderCode = `
       let index : u32 = global_id.x;
       var result : f32 = firstMatrix.numbers[index] + secondMatrix.numbers[index];
       let sizeA : u32 = uniforms.size[0];
-      resultMatrix.numbers[index] = f32(global_id.x); //f32(uniforms.size[0]);
+      // resultMatrix.numbers[index] = f32(global_id.x); //f32(uniforms.size[0]);
+      resultMatrix.numbers[index] = dottest4(vec4<f32>(1.0,1.0,1.0,1.0), vec4<f32>(1.0,1.0,1.0,2.0));
 
     }
 `;
