@@ -59,17 +59,40 @@ export const computeShaderCode = `
     }
 
     fn dottestu32(a: vec2<u32>, b : vec2<u32>) ->f32 {
-      return dot(a, b);
+      // dot(vecN<f32>, vecN<f32>) -> f32
+      // return dot(a, b);
+      return 0.0;
+
     }
 
     fn dottest4(a: vec4<f32>, b : vec4<f32>) ->f32 {
       return dot(a, b);
     }
+    // bool can not be converted to f32 or i32.
+    // error: type in vector constructor does not match vector type: expected 'f32', found 'bool'
+    fn unknow() -> vec4<f32> {
+      let a : vec4<f32>= vec4<f32>(0.,0., 0., 0.);
+      let b : vec4<f32>= vec4<f32>(0.,0., 0., 0.);
+      let aLessThanZero : vec4<bool> = vec4<bool>(a < vec4<f32>(0.,0., 0., 0.));
+      var aLessThanZeroF32 : vec4<f32> = vec4<f32>(0.,0., 0., 0.); 
+      if (aLessThanZero[0]) {
+        aLessThanZeroF32[0] = 1.0;
+      }
+      // var i :u32 = 0u;
+      for (var i:u32 = 0u; i< 4u; i = i+1u ) {
+        if (aLessThanZero[i]) {
+          aLessThanZeroF32[i] = 1.0;
+        }
+      }
+      return (vec4<f32>(aLessThanZeroF32) * (b * a)) + ((vec4<f32>(1.0, 1.0,1.0,1.0) - vec4<f32>(aLessThanZeroF32)) * a);
+    }
+
     // error: cannot assign to value of type 'u32'
     fn inputVar(index: u32) ->u32 {
-       index = index - 3u;
-       let a : u32 = index;
-       return a;
+       //index = index - 3u;
+       //let a : u32 = index;
+       //return a;
+       return 3u;
     }
 
     fn inputVar2(index: u32) ->u32 {
