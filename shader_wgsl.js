@@ -125,9 +125,9 @@ export const computeShaderCode = `
       numbers: array<f32>;
     };
 
-    [[group(0), binding(0)]] var<storage> firstMatrix : [[access(read)]] Matrix;
-    [[group(0), binding(1)]] var<storage> secondMatrix : [[access(read)]] Matrix;
-    [[group(0), binding(2)]] var<storage> resultMatrix : [[access(write)]] Matrix;
+    [[group(0), binding(0)]] var<storage, read> firstMatrix : Matrix;
+    [[group(0), binding(1)]] var<storage, read> secondMatrix :  Matrix;
+    [[group(0), binding(2)]] var<storage, write> resultMatrix :Matrix;
     [[group(0), binding(3)]] var<uniform> uniforms : Uniforms;
 
     // let sizeA : u32 = uniforms.size[0]; // Not work ! uniforms can not be used as global.

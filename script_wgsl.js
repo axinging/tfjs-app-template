@@ -158,7 +158,7 @@ function makeUniformsDataView(device, sizeA, sizeB) {
   const uniformBuffer = makeUniformsDataView(device, sizeA, sizeB);
 
   // Bind group layout and bind group
-
+  /*
   const bindGroupLayout = device.createBindGroupLayout({
     entries: [
       {
@@ -193,6 +193,7 @@ function makeUniformsDataView(device, sizeA, sizeB) {
       {binding: 3, resource: {buffer: uniformBuffer.buffer}}
     ]
   });
+  */
 
   // Compute shader code (GLSL)
 
@@ -201,7 +202,7 @@ function makeUniformsDataView(device, sizeA, sizeB) {
   const glslang = await glslangInit();
 
   const computePipeline = device.createComputePipeline({
-    layout: device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
+    //layout: device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
     computeStage: {
       module: device.createShaderModule(
           {code: computeShaderCode}),
@@ -209,6 +210,16 @@ function makeUniformsDataView(device, sizeA, sizeB) {
     }
   });
 
+  const bindGroupLayout = computePipeline.getBindGroupLayout(0);
+  const bindGroup = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [
+      {binding: 0, resource: {buffer: gpuBufferFirstMatrix}},
+      {binding: 1, resource: {buffer: gpuBufferSecondMatrix}},
+      {binding: 2, resource: {buffer: resultMatrixBuffer}},
+      {binding: 3, resource: {buffer: uniformBuffer.buffer}}
+    ]
+  });
   // Commands submission
 
   const commandEncoder = device.createCommandEncoder();
