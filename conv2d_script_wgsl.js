@@ -211,7 +211,7 @@ function getInputs() {
     size: resultMatrixBufferSize,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
   });
-  const useWGSL = false;
+  const useWGSL = true;
   // let uniformsWithType: Array<{type: string; data: number[];}> =
   const outputShape = [1, 3, 3, 64];
 
