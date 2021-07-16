@@ -1,6 +1,4 @@
 export const computeShaderCode = `
-
-
     fn idiv(a: i32, b: i32, sign: f32) -> i32 {
       var res: i32 = a / b;
       let mod: i32 = a % b;
@@ -140,13 +138,103 @@ export const computeShaderCode = `
     // [[builtin(workgroup_size)]] wg_size : vec3<u32>
     // resultMatrix.numbers[index] = f32(wg_size.x);
 
+    fn vec4BoolToVec4F32(value : vec4<bool>) -> vec4<f32> {
+      var res = vec4<f32>(0.0);
+      for (var i = 0u; i < 4u; i = i + 1u) {
+        if (value[i]) {
+          res[i] = 1.0;
+        }
+      }
+      return res;
+    }
+
+    fn boolToF32(value : bool) -> f32 {
+      if (value) {
+        return 1.0;
+      }
+      return 0.0;
+    }
+  
+
+    fn lessVec4F32(a : vec4<f32>, b : vec4<f32>) -> vec4<f32> {
+      let resultBool = vec4<bool>(a < b);
+      return vec4<f32>(boolToF32(resultBool[0]), boolToF32(resultBool[1]),
+          boolToF32(resultBool[2]), boolToF32(resultBool[3]));
+    }
+
+
+
+    fn binaryOperation(a : vec4<f32>, b : vec4<f32>) -> vec4<f32> {
+      // isModRound1 has 1 for components with round(mod(b, 2.0)) == 1, 0 otherwise.
+      // var ptr_vec4f32 = vec4<f32>(79.9);
+      // var part_vec4f32 = modf(ptr_vec4f32, &ptr_vec4f32);
+      // vec4 isModRound1 = vec4 (round(b % 2.0) == ivec4(1));
+      //let isModRound1 = vec4<f32>(vec4<i32>(round(b % vec4<f32>(2.0))) == vec4<i32>(1));
+      let isModRound1Bool = vec4<i32>(round(b % vec4<f32>(2.0))) == vec4<i32>(1);
+      let isModRound1 = vec4BoolToVec4F32(isModRound1Bool);
+      let multiplier = sign(a) * isModRound1 + (vec4<f32>(1.0) - isModRound1);
+      var result = multiplier * pow(abs(a), b);
+
+      // Ensure that a^0 = 1, including 0^0 = 1 as this correspond to TF and JS
+      let isExpZero = b == vec4<f32>(0.0);
+      // result.r = isExpZero.r ? 1.0 : result.r;
+      // result.g = isExpZero.g ? 1.0 : result.g;
+      // result.b = isExpZero.b ? 1.0 : result.b;
+      // result.a = isExpZero.a ? 1.0 : result.a;
+      if (isExpZero.r) {
+        result.r = 1.0;
+      }
+      if (isExpZero.g) {
+        result.g = 1.0;
+      }
+      if (isExpZero.b) {
+        result.b = 1.0;
+      }
+      if (isExpZero.a) {
+        result.a = 1.0;
+      }
+      // let isNaN = vec4<f32>(lessVec4F32(a, vec4<f32>(0.0))) * vec4<f32>(lessVec4F32(floor(b), b));
+      let isNaN = vec4<f32>(lessVec4F32(a, vec4<f32>(0.0))) * vec4<f32>(lessVec4F32(floor(b), b));
+      //{CHECK_NAN_SNIPPET_VEC4_WGSL}
+      return result;
+    }
+
     [[stage(compute), workgroup_size(16, 16, 1)]]
     fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
       let index : u32 = global_id.x;
       var result : f32 = firstMatrix.numbers[index] + secondMatrix.numbers[index];
       let sizeA : u32 = uniforms.size[0];
       // resultMatrix.numbers[index] = f32(global_id.x); //f32(uniforms.size[0]);
-      resultMatrix.numbers[index] = dottest4(vec4<f32>(1.0,1.0,1.0,1.0), vec4<f32>(1.0,1.0,1.0,2.0));
+      //resultMatrix.numbers[index] = dottest4(vec4<f32>(1.0,1.0,1.0,1.0), vec4<f32>(1.0,1.0,1.0,2.0));
+
+      // http://127.0.0.1:5500/index_wgsl.html
+      // let a = vec4<f32>(1.0,1.0,1.0,1.0);
+      // let b = vec4<f32>(1.0,1.0,1.0,1.0);
+      // let ia = (round(a));
+      // let ib = (round(b));
+      // let cond = ib != vec4<i32>(0); //notEqual(ib, vec4<i32>(0));
+      // let result = vec4<i32>(0);
+      // let s = sign(a) * sign(b);
+      // ptr_f32: ptr<function,f32>;
+      
+      // var ptr_f32 = 0.0;
+      // var part = modf(100.1, &ptr_f32);
+ 
+      // var ptr_vec4f32 = vec4<f32>(0.0);
+      // var ptr2_vec4f32 = vec4<f32>(10.18);
+      // var part_vec4f32 = modf(ptr2_vec4f32, &ptr_vec4f32);
+      // resultMatrix.numbers[index] = ptr_vec4f32[0];
+
+      // resultMatrix.numbers[index] = 11.0% 2.0;
+
+      // let a = vec4<f32>(2.0, 3.0, 1.0, 1.0);
+      // let b = a % vec4<f32> (2.0);
+      // resultMatrix.numbers[index] = b[2];
+
+      let a = vec4<f32>(2.0, 3.0, 1.0, 1.0);
+      let b = vec4<f32>(3.0, 2.0, 1.0, 1.0);
+      let c = binaryOperation(a, b);
+      resultMatrix.numbers[index] = c[1];
 
     }
 `;

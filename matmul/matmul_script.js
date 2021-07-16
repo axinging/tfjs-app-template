@@ -1,8 +1,13 @@
 // https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
 import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.8/dist/web-devel/glslang.js';
-// import glslangInit from './glslang.js';
-// import glslangInit from '@webgpu/glslang/dist/web-devel/glslang.onefile';
-import {computeShaderCode} from './shader.js';
+
+import {getComputeShaderCodeGLSL} from './matmul_shader_glsl.js';
+import {getComputeShaderCodeWGSL} from './matmul_shader_wgsl.js';
+
+const useWGSL = false;
+const useAutoLayout = false;
+// when useAutoLayout is true, complains: numBindings mismatch
+console.log('WGSL = ' + useWGSL + ',GPU autoLayout = ' + useAutoLayout);
 
 function acquireBuffer(device, byteSize, usage) {
   const newBuffer = device.createBuffer({size: byteSize, usage: usage});
@@ -18,13 +23,19 @@ function arrayToDataView(arrays, length) {
   arrays.forEach(array => {
     const arrayData = array.data;
 
-    if (array.type !== 'int32' && array.type !== 'float32') {
+    if (array.type !== 'int32' && array.type !== 'float32' &&
+        array.type !== 'uint32') {
       throw new Error(`${array.type} not supported!`);
     }
 
     if (array.type === 'int32') {
       arrayData.forEach(d => {
         uniformDataView.setInt32(dataViewIndex * BYTES_PER_ELEMENT, d, true);
+        dataViewIndex++;
+      });
+    } else if (array.type === 'uint32') {
+      arrayData.forEach(d => {
+        uniformDataView.setUint32(dataViewIndex * BYTES_PER_ELEMENT, d, true);
         dataViewIndex++;
       });
     } else {
@@ -85,12 +96,7 @@ function computePadding(uniformsWithType) {
   return arrayToDataView(dimUniformsData, dataViewIndex);
 }
 
-
-function makeUniformsDataView(device, sizeA, sizeB) {
-  let uniformsWithType = [{type: 'float32', data: [NaN]}];
-  uniformsWithType.push({type: 'int32', data: [sizeA, sizeB]});
-  const uniformsDataView = computePadding(uniformsWithType);
-
+function makeUniformsDataView(device, uniformsDataView) {
   const dimensionsBuffer = device.createBuffer({
     size: uniformsDataView.byteLength,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
@@ -104,6 +110,19 @@ function makeUniformsDataView(device, sizeA, sizeB) {
   };
 }
 
+function getInputs(M, K, N) {
+  const inputData = [];
+  for (let i = 0; i < M * K; i++) {
+    inputData.push(i % 5);
+  }
+
+  const wData = [];
+  for (let i = 0; i < K * N; i++) {
+    wData.push(i % 5);
+  }
+  return [new Float32Array(inputData), new Float32Array(wData)];
+}
+
 
 (async () => {
   if (!navigator.gpu) {
@@ -115,10 +134,11 @@ function makeUniformsDataView(device, sizeA, sizeB) {
   const adapter = await navigator.gpu.requestAdapter();
   const device = await adapter.requestDevice();
 
-  // First Matrix
+  const M = 64, N = M, K = M;
 
-  const firstMatrix = new Float32Array([1, 2, 3, 4, 5, 6, 7, NaN]);
+  const [firstMatrix, secondMatrix] = getInputs(M, K, N);
 
+  // First matrix.
   const gpuBufferFirstMatrix = device.createBuffer({
     mappedAtCreation: true,
     size: firstMatrix.byteLength,
@@ -127,13 +147,8 @@ function makeUniformsDataView(device, sizeA, sizeB) {
   const arrayBufferFirstMatrix = gpuBufferFirstMatrix.getMappedRange();
   new Float32Array(arrayBufferFirstMatrix).set(firstMatrix);
   gpuBufferFirstMatrix.unmap();
-  // TODO(memoryleak): below result in Destroyed buffer used in a submit.
-  // gpuBufferFirstMatrix.destroy();
 
-  // Second Matrix
-
-  const secondMatrix = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
-
+  // Second Matrix.
   const gpuBufferSecondMatrix = device.createBuffer({
     mappedAtCreation: true,
     size: secondMatrix.byteLength,
@@ -142,49 +157,111 @@ function makeUniformsDataView(device, sizeA, sizeB) {
   const arrayBufferSecondMatrix = gpuBufferSecondMatrix.getMappedRange();
   new Float32Array(arrayBufferSecondMatrix).set(secondMatrix);
   gpuBufferSecondMatrix.unmap();
-  // TODO(memoryleak): below result in Destroyed buffer used in a submit.
-  // gpuBufferSecondMatrix.destroy();
 
-  // Result Matrix
-  const sizeA = 2;
-  const sizeB = 4;
-  const resultMatrixBufferSize =
-      Float32Array.BYTES_PER_ELEMENT * (sizeA * sizeB);
+  // Result Matrix.
+  const resultMatrixBufferSize = Float32Array.BYTES_PER_ELEMENT * (M * N);
   const resultMatrixBuffer = device.createBuffer({
     size: resultMatrixBufferSize,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
   });
 
+  const outputShape = [1, M, N, 1];
 
-  const uniformBuffer = makeUniformsDataView(device, sizeA, sizeB);
-
-  // Bind group layout and bind group
-
-  const bindGroupLayout = device.createBindGroupLayout({
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {type: 'read-only-storage'}
-      },
-      {
-        binding: 1,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {type: 'read-only-storage'}
-      },
-      {
-        binding: 2,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {type: 'storage'}
-      },
-      {
-        binding: 3,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {type: 'uniform'}
-      }
-    ]
+  let uniformsWithType = [{type: 'float32', data: [NaN]}];
+  const bufferShapes = [[1, M, K, 1], [1, K, N, 1], [1, M, N, 1]];
+  let uniformsType = 'int32';
+  if (useWGSL) {
+    uniformsType = 'uint32';
+  }
+  bufferShapes.map(d => {
+    uniformsWithType.push({type: uniformsType, data: d});
   });
 
+  let uniforms = null;
+  const uniformsDataView = computePadding(uniformsWithType);
+  const uniformsByteLength = uniformsDataView.byteLength;
+  const uniformBuffer = makeUniformsDataView(device, uniformsDataView);
+
+  // Bind group layout and bind group
+  let bindGroupLayout;
+  if (useAutoLayout == false) {
+    bindGroupLayout = device.createBindGroupLayout({
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {type: 'read-only-storage'}
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {type: 'read-only-storage'}
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {type: 'storage'}
+        },
+        {
+          binding: 3,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {type: 'uniform'}
+        }
+      ]
+    });
+  }
+
+  const glslang = await glslangInit();
+  let computePipeline;
+  const workgroupSize = [16, 16, 1];
+
+  if (useAutoLayout) {
+    if (useWGSL) {
+      computePipeline = device.createComputePipeline({
+        computeStage: {
+          module: device.createShaderModule(
+              {code: getComputeShaderCodeWGSL(workgroupSize)}),
+          entryPoint: 'main'
+        }
+      });
+    } else {
+      computePipeline = device.createComputePipeline({
+        computeStage: {
+          module: device.createShaderModule({
+            code: glslang.compileGLSL(
+                getComputeShaderCodeGLSL(workgroupSize), 'compute')
+          }),
+          entryPoint: 'main'
+        }
+      });
+    }
+    bindGroupLayout = computePipeline.getBindGroupLayout(0);
+  } else {
+    if (useWGSL) {
+      computePipeline = device.createComputePipeline({
+        layout:
+            device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
+        computeStage: {
+          module: device.createShaderModule(
+              {code: getComputeShaderCodeWGSL(workgroupSize)}),
+          entryPoint: 'main'
+        }
+      });
+    } else {
+      console.log(getComputeShaderCodeGLSL(workgroupSize));
+      computePipeline = device.createComputePipeline({
+        layout:
+            device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
+        computeStage: {
+          module: device.createShaderModule({
+            code: glslang.compileGLSL(
+                getComputeShaderCodeGLSL(workgroupSize), 'compute')
+          }),
+          entryPoint: 'main'
+        }
+      });
+    }
+  }
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
     entries: [
@@ -195,29 +272,14 @@ function makeUniformsDataView(device, sizeA, sizeB) {
     ]
   });
 
-  // Compute shader code (GLSL)
-
-  // Pipeline setup
-
-  const glslang = await glslangInit();
-
-  const computePipeline = device.createComputePipeline({
-    layout: device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
-    computeStage: {
-      module: device.createShaderModule(
-          {code: glslang.compileGLSL(computeShaderCode, 'compute')}),
-      entryPoint: 'main'
-    }
-  });
-
   // Commands submission
-
   const commandEncoder = device.createCommandEncoder();
 
   const passEncoder = commandEncoder.beginComputePass();
   passEncoder.setPipeline(computePipeline);
   passEncoder.setBindGroup(0, bindGroup);
-  passEncoder.dispatch(sizeA * sizeB /* x */, 1 /* y */);
+  passEncoder.dispatch(
+      M / workgroupSize[0] /* x */, N / workgroupSize[1] /* y */, 1);
   passEncoder.endPass();
 
   // Get a GPU buffer for reading in an unmapped state.
@@ -237,7 +299,8 @@ function makeUniformsDataView(device, sizeA, sizeB) {
   const gpuCommands = commandEncoder.finish();
   device.queue.submit([gpuCommands]);
 
-  // TODO(memoryleak): below is successful.
+  gpuBufferFirstMatrix.destroy();
+  gpuBufferSecondMatrix.destroy();
   resultMatrixBuffer.destroy();
 
   // Read buffer.
