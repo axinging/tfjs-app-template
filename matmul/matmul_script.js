@@ -1,8 +1,8 @@
 // https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
 import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.8/dist/web-devel/glslang.js';
 
-import {getComputeShaderCodeGLSL} from './matmul_shader_glsl.js';
 import {getComputeShaderCodeGLSL2} from './matmul2_shader_glsl.js';
+import {getComputeShaderCodeGLSL} from './matmul_shader_glsl.js';
 import {getComputeShaderCodeWGSL} from './matmul_shader_wgsl.js';
 
 const useAutoLayout = false;
@@ -11,8 +11,7 @@ const useAutoLayout = false;
 function getURLState(url) {
   let params = new URLSearchParams(url);
   const keys = [...params.keys()];
-  if (keys.length === 0)
-    return 0;
+  if (keys.length === 0) return 0;
   if (params.has('case')) {
     return Number(params.get('case'));
   }
@@ -143,9 +142,9 @@ function getInputs(M, K, N) {
   let useWGSL = false;
   const algoSelector = getURLState(window.location.search);
   let getComputeShaderCode = getComputeShaderCodeGLSL;
-  if (algoSelector == 2){
+  if (algoSelector == 2) {
     getComputeShaderCode = getComputeShaderCodeGLSL2;
-  } else if (algoSelector == 100){
+  } else if (algoSelector == 100) {
     getComputeShaderCode = getComputeShaderCodeWGSL;
   }
   if (algoSelector >= 100) {
@@ -235,52 +234,26 @@ function getInputs(M, K, N) {
   let computePipeline;
   const workgroupSize = [16, 16, 1];
 
+  let module;
+  if (useWGSL) {
+    module =
+        device.createShaderModule({code: getComputeShaderCode(workgroupSize)});
+  } else {
+    module = device.createShaderModule({
+      code: glslang.compileGLSL(getComputeShaderCode(workgroupSize), 'compute')
+    })
+  }
+
   if (useAutoLayout) {
-    if (useWGSL) {
-      computePipeline = device.createComputePipeline({
-        computeStage: {
-          module: device.createShaderModule(
-              {code: getComputeShaderCode(workgroupSize)}),
-          entryPoint: 'main'
-        }
-      });
-    } else {
-      computePipeline = device.createComputePipeline({
-        computeStage: {
-          module: device.createShaderModule({
-            code: glslang.compileGLSL(
-                getComputeShaderCode(workgroupSize), 'compute')
-          }),
-          entryPoint: 'main'
-        }
-      });
-    }
+    computePipeline = device.createComputePipeline(
+        {computeStage: {module: module, entryPoint: 'main'}});
     bindGroupLayout = computePipeline.getBindGroupLayout(0);
   } else {
-    if (useWGSL) {
-      computePipeline = device.createComputePipeline({
-        layout:
-            device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
-        computeStage: {
-          module: device.createShaderModule(
-              {code: getComputeShaderCode(workgroupSize)}),
-          entryPoint: 'main'
-        }
-      });
-    } else {
-      console.log(getComputeShaderCodeGLSL(workgroupSize));
-      computePipeline = device.createComputePipeline({
-        layout:
-            device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
-        computeStage: {
-          module: device.createShaderModule({
-            code: glslang.compileGLSL(
-                getComputeShaderCode(workgroupSize), 'compute')
-          }),
-          entryPoint: 'main'
-        }
-      });
-    }
+    computePipeline = device.createComputePipeline({
+      layout:
+          device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
+      computeStage: {module: module, entryPoint: 'main'}
+    });
   }
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
