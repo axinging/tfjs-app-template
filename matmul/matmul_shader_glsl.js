@@ -1,3 +1,4 @@
+// https://cnugteren.github.io/tutorial/pages/page3.html
 export function getComputeShaderCodeGLSL(workGroupSize) {
   return `
 #version 450

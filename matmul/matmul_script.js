@@ -2,12 +2,22 @@
 import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.8/dist/web-devel/glslang.js';
 
 import {getComputeShaderCodeGLSL} from './matmul_shader_glsl.js';
+import {getComputeShaderCodeGLSL2} from './matmul2_shader_glsl.js';
 import {getComputeShaderCodeWGSL} from './matmul_shader_wgsl.js';
 
-const useWGSL = false;
 const useAutoLayout = false;
 // when useAutoLayout is true, complains: numBindings mismatch
-console.log('WGSL = ' + useWGSL + ',GPU autoLayout = ' + useAutoLayout);
+
+function getURLState(url) {
+  let params = new URLSearchParams(url);
+  const keys = [...params.keys()];
+  if (keys.length === 0)
+    return 0;
+  if (params.has('case')) {
+    return Number(params.get('case'));
+  }
+  return 0;
+}
 
 function acquireBuffer(device, byteSize, usage) {
   const newBuffer = device.createBuffer({size: byteSize, usage: usage});
@@ -130,7 +140,17 @@ function getInputs(M, K, N) {
         'WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag.');
     return;
   }
-
+  let useWGSL = false;
+  const algoSelector = getURLState(window.location.search);
+  let getComputeShaderCode = getComputeShaderCodeGLSL;
+  if (algoSelector == 2){
+    getComputeShaderCode = getComputeShaderCodeGLSL2;
+  } else if (algoSelector == 100){
+    getComputeShaderCode = getComputeShaderCodeWGSL;
+  }
+  if (algoSelector >= 100) {
+    useWGSL = true;
+  }
   const adapter = await navigator.gpu.requestAdapter();
   const device = await adapter.requestDevice();
 
@@ -220,7 +240,7 @@ function getInputs(M, K, N) {
       computePipeline = device.createComputePipeline({
         computeStage: {
           module: device.createShaderModule(
-              {code: getComputeShaderCodeWGSL(workgroupSize)}),
+              {code: getComputeShaderCode(workgroupSize)}),
           entryPoint: 'main'
         }
       });
@@ -229,7 +249,7 @@ function getInputs(M, K, N) {
         computeStage: {
           module: device.createShaderModule({
             code: glslang.compileGLSL(
-                getComputeShaderCodeGLSL(workgroupSize), 'compute')
+                getComputeShaderCode(workgroupSize), 'compute')
           }),
           entryPoint: 'main'
         }
@@ -243,7 +263,7 @@ function getInputs(M, K, N) {
             device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
         computeStage: {
           module: device.createShaderModule(
-              {code: getComputeShaderCodeWGSL(workgroupSize)}),
+              {code: getComputeShaderCode(workgroupSize)}),
           entryPoint: 'main'
         }
       });
@@ -255,7 +275,7 @@ function getInputs(M, K, N) {
         computeStage: {
           module: device.createShaderModule({
             code: glslang.compileGLSL(
-                getComputeShaderCodeGLSL(workgroupSize), 'compute')
+                getComputeShaderCode(workgroupSize), 'compute')
           }),
           entryPoint: 'main'
         }
