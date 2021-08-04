@@ -1,4 +1,5 @@
-export const computeShaderCode = `
+export function getComputeShaderCodeWGSL(workGroupSize) { 
+  return `
     fn idiv(a: i32, b: i32, sign: f32) -> i32 {
       var res: i32 = a / b;
       let mod: i32 = a % b;
@@ -114,10 +115,12 @@ export const computeShaderCode = `
     }
 
     // float NAN; int sizeA; int sizeB;
-    [[block]] struct Uniforms {
-      NAN : f32;
-      size: vec2<u32>;
-    };
+    // [[block]] struct Uniforms {
+    //   NAN : f32;
+    //   size: vec2<u32>;
+    // };
+
+    [[block]] struct Uniforms { NAN : u32; xShape : vec4<u32>; wShape : vec4<u32>; outShape : vec4<u32>;};
 
     [[block]] struct Matrix {
       numbers: array<f32>;
@@ -199,15 +202,14 @@ export const computeShaderCode = `
       return result;
     }
 
-    [[stage(compute), workgroup_size(16, 16, 1)]]
+    [[stage(compute), workgroup_size(${workGroupSize[0]}, ${workGroupSize[1]}, ${workGroupSize[2]})]]
     fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
       let index : u32 = global_id.x;
       var result : f32 = firstMatrix.numbers[index] + secondMatrix.numbers[index];
-      let sizeA : u32 = uniforms.size[0];
       // resultMatrix.numbers[index] = f32(global_id.x); //f32(uniforms.size[0]);
       //resultMatrix.numbers[index] = dottest4(vec4<f32>(1.0,1.0,1.0,1.0), vec4<f32>(1.0,1.0,1.0,2.0));
 
-      // http://127.0.0.1:5500/index_wgsl.html
+      // http://127.0.0.1:5500/index.html?case=100
       // let a = vec4<f32>(1.0,1.0,1.0,1.0);
       // let b = vec4<f32>(1.0,1.0,1.0,1.0);
       // let ia = (round(a));
@@ -236,7 +238,8 @@ export const computeShaderCode = `
       let c = binaryOperation(a, b);
       let dotProd = 0.0;
 
-      resultMatrix.numbers[index] = 1.0 / pow(1.0, -20.0);
+      resultMatrix.numbers[index] = result;//1.0 / pow(1.0, -20.0);
 
     }
 `;
+  }
