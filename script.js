@@ -141,7 +141,7 @@ function makeUniformsDataView(device, uniformsDataView) {
   const size = 8;
   const workgroupSize = [size, 1, 1];
 
-  const firstMatrix = new Float32Array([1, 2, 3, 4, 5, 6, 7, NaN]);
+  const firstMatrix = new Float32Array([1, 2, 3, NaN, 4, 5, 7, NaN]);
 
   const gpuBufferFirstMatrix = device.createBuffer({
     mappedAtCreation: true,
@@ -154,7 +154,7 @@ function makeUniformsDataView(device, uniformsDataView) {
 
   // Second Matrix
 
-  const secondMatrix = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
+  const secondMatrix = new Float32Array([0, 2, 4, NaN, NaN, 5, 6, NaN]);
 
   const gpuBufferSecondMatrix = device.createBuffer({
     mappedAtCreation: true,
