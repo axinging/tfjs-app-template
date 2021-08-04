@@ -41,6 +41,7 @@ void main() {
   // without: -0.015625
   int index = int(gl_GlobalInvocationID.x);
   int a = -10;
-  resultMatrix.numbers[index] = binaryOperation(-4.0, -3.0);
+   resultMatrix.numbers[index] = 1.0/1e-20;// binaryOperation(-4.0, -3.0);
+  // resultMatrix.numbers[index] = 1.0/ pow(10.0, -20.0);
 }
 `;

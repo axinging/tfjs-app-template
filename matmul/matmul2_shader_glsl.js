@@ -26,7 +26,7 @@ export function getComputeShaderCodeGLSL2(workGroupSize) {
     C[0] = value;
   }
 
-  const uint TS = 16;
+  const uint TS = ${workGroupSize[0]};
 
   shared float Asub[TS][TS];
   shared float Bsub[TS][TS];
@@ -41,7 +41,6 @@ export function getComputeShaderCodeGLSL2(workGroupSize) {
  
     // Local memory to fit a tile of TS*TS elements of A and B
 
- 
     // Initialise the accumulation register
     float acc = 0.0f;
     
@@ -71,14 +70,3 @@ export function getComputeShaderCodeGLSL2(workGroupSize) {
     C[globalCol*M + globalRow] = acc;
   }`;
 }
-
-/*
-__kernel void myGEMM2(const int M, const int N, const int K,
-                      const __global float* A,
-                      const __global float* B,
-                      __global float* C) {
-    
-
-}
-
-*/

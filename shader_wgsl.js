@@ -234,7 +234,9 @@ export const computeShaderCode = `
       let a = vec4<f32>(2.0, 3.0, 1.0, 1.0);
       let b = vec4<f32>(3.0, 2.0, 1.0, 1.0);
       let c = binaryOperation(a, b);
-      resultMatrix.numbers[index] = c[1];
+      let dotProd = 0.0;
+
+      resultMatrix.numbers[index] = 1.0 / pow(1.0, -20.0);
 
     }
 `;

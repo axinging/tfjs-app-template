@@ -1,9 +1,7 @@
 // https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
 import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.8/dist/web-devel/glslang.js';
 
-import {getComputeShaderCodeGLSL2} from './matmul2_shader_glsl.js';
-import {getComputeShaderCodeGLSL} from './matmul_shader_glsl.js';
-import {getComputeShaderCodeWGSL} from './matmul_shader_wgsl.js';
+import {getComputeShaderCodeGLSL} from './matmulrect_shader_glsl.js';
 
 const useAutoLayout = false;
 // when useAutoLayout is true, complains: numBindings mismatch
@@ -122,7 +120,7 @@ function makeUniformsDataView(device, uniformsDataView) {
 function getInputs(M, K, N) {
   const inputData = [];
   for (let i = 0; i < M * K; i++) {
-    inputData.push(i%M);
+    inputData.push(i);
   }
 
   const wData = [];
@@ -142,18 +140,13 @@ function getInputs(M, K, N) {
   let useWGSL = false;
   const algoSelector = getURLState(window.location.search);
   let getComputeShaderCode = getComputeShaderCodeGLSL;
-  if (algoSelector == 2) {
-    getComputeShaderCode = getComputeShaderCodeGLSL2;
-  } else if (algoSelector == 100) {
-    getComputeShaderCode = getComputeShaderCodeWGSL;
-  }
   if (algoSelector >= 100) {
     useWGSL = true;
   }
   const adapter = await navigator.gpu.requestAdapter();
   const device = await adapter.requestDevice();
 
-  const M = 16, N = M, K = M;
+  const M = 4, K = 4, N = 4;
   const workgroupSize = [M, N, 1];
 
   const [firstMatrix, secondMatrix] = getInputs(M, K, N);
