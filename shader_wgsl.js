@@ -33,7 +33,7 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
 
     // Return 0 when NaN
     fn binaryOperation(a : f32, b : f32) -> f32 {
-      return boolToF32(a >= b);
+      return a + b;
     }
 
     fn caseF32(index : u32) {
@@ -53,13 +53,22 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
       resultMatrix.numbers[3] = resultVec4[3];
     }
 
+    fn activation(a : f32) -> f32 {
+      return a;
+    }
+
+    fn mm_write(globalId : vec3<u32>, valueIn : f32) {
+      var value = valueIn;
+      let index : u32 = globalId.x;
+      // value = activation(valueIn);
+      resultMatrix.numbers[index] = value;
+    }
+
     [[stage(compute), workgroup_size(${workGroupSize[0]}, ${workGroupSize[1]}, ${workGroupSize[2]})]]
-    fn main([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
-      let index : u32 = global_id.x;
-      // First: [1, 2, 3, NaN, 4, 5, 7, NaN]
-      // Second: [0, 2, 4, NaN, NaN, 5, 6, NaN]
-      // caseF32(index);
-      caseVec4(index);
+    fn main([[builtin(global_invocation_id)]] globalId : vec3<u32>) {
+      let index : u32 = globalId.x;
+      let result = firstMatrix.numbers[index] + secondMatrix.numbers[index];
+      mm_write(globalId, result);
     }
 `;
   }
