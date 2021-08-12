@@ -26,6 +26,15 @@
     <script src="https://unpkg.com/@tensorflow/tfjs-backend-webgl@latest/dist/tf-backend-webgl.js" crossorigin></script>
     <script>
 
+        function getURLState(url) {
+            let params = new URLSearchParams(url);
+            const keys = [...params.keys()];
+            if (keys.length === 0) return 0;
+            if (params.has('recreate')) {
+                return true;
+            }
+            return false;
+        }
         async function loadImage(imagePath) {
             const imageBucket =
                 'https://storage.googleapis.com/tfjs-models/assets/posenet/';
@@ -65,7 +74,7 @@
                 pixels instanceof HTMLImageElement) {
                 isImage = true;
                 // tslint:disable-next-line: no-any
-            } 
+            }
 
             const [width, height] = [pixels.width, pixels.height];
             let vals; //: Uint8ClampedArray | Uint8Array;
@@ -96,16 +105,18 @@
             return tf.tensor3d(values, outShape, 'int32');
         }
 
-        async function fromPixelWrap() {
+        async function fromPixelWrap(recreateContext = false) {
             const image = await loadImage('tennis_standing.jpg');
-            const fpImage = fromPixels_(image,3, false);
+            const fpImage = fromPixels_(image, 3, recreateContext);
             return fpImage;
         }
 
         async function testFromPixel() {
-            const fpImage1 = await fromPixelWrap();
+            const recreateContext = getURLState(window.location.search);
+            console.log(recreateContext);
+            const fpImage1 = await fromPixelWrap(recreateContext);
 
-            const fpImage2 = await fromPixelWrap();
+            const fpImage2 = await fromPixelWrap(recreateContext);
             consoleLogArray(await fpImage1.data());
             consoleLogArray(await fpImage2.data());
             tf.test_util.expectArraysClose(await fpImage1.data(), await fpImage2.data());
