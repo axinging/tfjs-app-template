@@ -49,8 +49,8 @@
             console.log(comment + array.slice(0, printLen).toString());
         }
 
-        let fromPixels2DContext; //CanvasRenderingContext2D;
-        function fromPixels_(pixels, numChannels = 3) {
+        let fromPixels2DContext;
+        function fromPixels_(pixels, numChannels = 3, recreateContext = false) {
             // Sanity checks.
             if (numChannels > 4) {
                 throw new Error(
@@ -71,7 +71,7 @@
             let vals; //: Uint8ClampedArray | Uint8Array;
 
             if (isImage) {
-                if (fromPixels2DContext == null) {
+                if (fromPixels2DContext == null || recreateContext == true) {
                     fromPixels2DContext = document.createElement('canvas').getContext('2d');
                 }
                 fromPixels2DContext.canvas.width = width;
@@ -79,9 +79,8 @@
                 fromPixels2DContext.drawImage(
                     pixels, 0, 0, width, height);
                 vals = fromPixels2DContext.getImageData(0, 0, width, height).data;
-                consoleLogArray(vals, 3, "data after getImageData ");
             }
-            let values; //: Int32Array;
+            let values;
             if (numChannels === 4) {
                 values = new Int32Array(vals);
             } else {
@@ -99,8 +98,7 @@
 
         async function fromPixelWrap() {
             const image = await loadImage('tennis_standing.jpg');
-            // const fpImage = tf.browser.fromPixels(image);
-            const fpImage = fromPixels_(image);
+            const fpImage = fromPixels_(image,3, false);
             return fpImage;
         }
 
@@ -113,24 +111,6 @@
             tf.test_util.expectArraysClose(await fpImage1.data(), await fpImage2.data());
         }
 
-        async function getImageData() {
-            const width = 513;
-            const height = 513;
-            const fromPixels2DContext = document.createElement('canvas').getContext('2d');
-            const pixels = await loadImage('tennis_standing.jpg');
-            fromPixels2DContext.canvas.width = width;
-            fromPixels2DContext.canvas.height = height;
-            fromPixels2DContext.drawImage(pixels, 0, 0, width, height);
-            const vals = fromPixels2DContext.getImageData(0, 0, width, height).data;
-            consoleLogArray(vals);
-            return vals;
-        }
-
-        async function testGetImageData() {
-            const image = await getImageData();
-            const image2 = await getImageData();
-            tf.test_util.expectArraysClose(image, image2);
-        }
         // Change this to webgl, wasm, cpu.
         const state = {
             backend: 'cpu'
