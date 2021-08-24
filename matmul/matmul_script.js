@@ -1,8 +1,9 @@
 // https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
 import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.12/dist/web-devel/glslang.js';
 
-import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from './matmul_shader.js';
 import {getComputeShaderCodeGLSL1} from './matmul1_shader.js';
+import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from './matmul_shader.js';
+
 const useAutoLayout = false;
 // when useAutoLayout is true, complains: numBindings mismatch
 
@@ -19,9 +20,6 @@ function getURLState(url) {
   if (params.has('lang')) {
     langOption = params.get('lang');
   }
-}
-
-function isWGSL() {
   return langOption === 'wgsl';
 }
 
@@ -129,7 +127,7 @@ function makeUniformsDataView(device, uniformsDataView) {
 function getInputs(M, K, N) {
   const inputData = [];
   for (let i = 0; i < M * K; i++) {
-    inputData.push(i%M);
+    inputData.push(i % M);
   }
 
   const wData = [];
@@ -140,16 +138,8 @@ function getInputs(M, K, N) {
 }
 
 
-async function ExecuteProgram() {
-  
-}
-
-(async () => {
-  if (!navigator.gpu) {
-    console.log(
-        'WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag.');
-    return;
-  }
+async function executeProgram(
+    device, firstMatrix, secondMatrix, M, N, K, useWGSL) {
   var glslFuncs = {
     0: getComputeShaderCodeGLSL,
     1: getComputeShaderCodeGLSL1,
@@ -157,22 +147,12 @@ async function ExecuteProgram() {
   var wgslFuncs = {
     0: getComputeShaderCodeWGSL,
   };
-  getURLState(window.location.search);
-  let useWGSL = isWGSL();
   var getComputeShaderCode;
   if (useWGSL) {
     getComputeShaderCode = wgslFuncs[caseOption];
   } else {
     getComputeShaderCode = glslFuncs[caseOption];
   }
-  const adapter = await navigator.gpu.requestAdapter();
-  const device = await adapter.requestDevice();
-
-  const M = 16, N = M, K = M;
-  const workgroupSize = [M, N, 1];
-
-  const [firstMatrix, secondMatrix] = getInputs(M, K, N);
-
   // First matrix.
   const gpuBufferFirstMatrix = device.createBuffer({
     mappedAtCreation: true,
@@ -192,7 +172,7 @@ async function ExecuteProgram() {
   const arrayBufferSecondMatrix = gpuBufferSecondMatrix.getMappedRange();
   new Float32Array(arrayBufferSecondMatrix).set(secondMatrix);
   gpuBufferSecondMatrix.unmap();
-
+  const workgroupSize = [M, N, 1];
   // Result Matrix.
   const resultMatrixBufferSize = Float32Array.BYTES_PER_ELEMENT * (M * N);
   const resultMatrixBuffer = device.createBuffer({
@@ -249,7 +229,6 @@ async function ExecuteProgram() {
   let computePipeline;
   let module;
   if (useWGSL) {
-    console.log(getComputeShaderCode(workgroupSize));
     module =
         device.createShaderModule({code: getComputeShaderCode(workgroupSize)});
   } else {
@@ -313,6 +292,30 @@ async function ExecuteProgram() {
 
   // Read buffer.
   await gpuReadBuffer.mapAsync(GPUMapMode.READ);
-  const arrayBuffer = gpuReadBuffer.getMappedRange();
+  return gpuReadBuffer.getMappedRange();
+}
+
+async function getDevice() {
+  if (!navigator.gpu) {
+    console.log(
+        'WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag.');
+    return;
+  }
+  const adapter = await navigator.gpu.requestAdapter();
+  return await adapter.requestDevice();
+}
+
+(async () => {
+  const device = await getDevice();
+  const M = 16, N = M, K = M;
+  const [firstMatrix, secondMatrix] = getInputs(M, K, N);
+  let useWGSL = getURLState(window.location.search);
+  const arrayBuffer = await executeProgram(
+      device, firstMatrix, secondMatrix, M, N, K, useWGSL);
   console.log(new Float32Array(arrayBuffer));
+  {
+    const arrayBuffer = await executeProgram(
+      device, firstMatrix, secondMatrix, M, N, K, true);
+    console.log(new Float32Array(arrayBuffer));
+  }
 })();
