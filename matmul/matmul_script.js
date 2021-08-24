@@ -240,13 +240,13 @@ async function executeProgram(
 
   if (useAutoLayout) {
     computePipeline = device.createComputePipeline(
-        {computeStage: {module: module, entryPoint: 'main'}});
+        {compute: {module: module, entryPoint: 'main'}});
     bindGroupLayout = computePipeline.getBindGroupLayout(0);
   } else {
     computePipeline = device.createComputePipeline({
       layout:
           device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
-      computeStage: {module: module, entryPoint: 'main'}
+      compute: {module: module, entryPoint: 'main'}
     });
   }
   const bindGroup = device.createBindGroup({
