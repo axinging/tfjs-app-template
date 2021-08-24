@@ -73,11 +73,24 @@
                 typeof (HTMLImageElement) !== 'undefined' &&
                 pixels instanceof HTMLImageElement) {
                 isImage = true;
-                // tslint:disable-next-line: no-any
             }
 
             const [width, height] = [pixels.width, pixels.height];
-            let vals; //: Uint8ClampedArray | Uint8Array;
+            let vals;
+
+            CanvasRenderingContext2D.prototype.clear =
+                CanvasRenderingContext2D.prototype.clear || function (preserveTransform) {
+                    if (preserveTransform) {
+                        this.save();
+                        this.setTransform(1, 0, 0, 1, 0, 0);
+                    }
+
+                    this.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                    if (preserveTransform) {
+                        this.restore();
+                    }
+                };
 
             if (isImage) {
                 if (fromPixels2DContext == null || recreateContext == true) {
@@ -85,6 +98,9 @@
                 }
                 fromPixels2DContext.canvas.width = width;
                 fromPixels2DContext.canvas.height = height;
+                //fromPixels2DContext.reset();
+                //fromPixels2DContext.fillStyle = 'green';
+                //fromPixels2DContext.fillRect(0, 0, width, height);
                 fromPixels2DContext.drawImage(
                     pixels, 0, 0, width, height);
                 vals = fromPixels2DContext.getImageData(0, 0, width, height).data;
@@ -130,7 +146,6 @@
         const bindPage = async () => {
             await tf.setBackend(state.backend);
             await testFromPixel();
-            //await testGetImageData();
         }
 
         bindPage();

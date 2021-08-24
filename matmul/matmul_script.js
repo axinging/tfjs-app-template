@@ -1,9 +1,8 @@
 // https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
-import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.8/dist/web-devel/glslang.js';
+import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.12/dist/web-devel/glslang.js';
 
 import {getComputeShaderCodeGLSL2} from './matmul2_shader_glsl.js';
-import {getComputeShaderCodeGLSL} from './matmul_shader_glsl.js';
-import {getComputeShaderCodeWGSL} from './matmul_shader_wgsl.js';
+import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from './matmul_shader.js';
 
 const useAutoLayout = false;
 // when useAutoLayout is true, complains: numBindings mismatch
@@ -140,6 +139,7 @@ function getInputs(M, K, N) {
     return;
   }
   let useWGSL = false;
+  //useWGSL = true;
   const algoSelector = getURLState(window.location.search);
   let getComputeShaderCode = getComputeShaderCodeGLSL;
   if (algoSelector == 2) {
@@ -147,9 +147,11 @@ function getInputs(M, K, N) {
   } else if (algoSelector == 100) {
     getComputeShaderCode = getComputeShaderCodeWGSL;
   }
+  //getComputeShaderCode = getComputeShaderCodeWGSL;
   if (algoSelector >= 100) {
     useWGSL = true;
   }
+
   const adapter = await navigator.gpu.requestAdapter();
   const device = await adapter.requestDevice();
 
@@ -231,14 +233,14 @@ function getInputs(M, K, N) {
     });
   }
 
-  const glslang = await glslangInit();
   let computePipeline;
-
   let module;
   if (useWGSL) {
+    console.log(getComputeShaderCode(workgroupSize));
     module =
         device.createShaderModule({code: getComputeShaderCode(workgroupSize)});
   } else {
+    const glslang = await glslangInit();
     module = device.createShaderModule({
       code: glslang.compileGLSL(getComputeShaderCode(workgroupSize), 'compute')
     })
