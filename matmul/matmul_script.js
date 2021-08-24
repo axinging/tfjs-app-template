@@ -1,20 +1,28 @@
 // https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
 import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.12/dist/web-devel/glslang.js';
 
-import {getComputeShaderCodeGLSL2} from './matmul2_shader_glsl.js';
 import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from './matmul_shader.js';
-
+import {getComputeShaderCodeGLSL1} from './matmul1_shader.js';
 const useAutoLayout = false;
 // when useAutoLayout is true, complains: numBindings mismatch
+
+let langOption = 'glsl';
+let caseOption = 0;
 
 function getURLState(url) {
   let params = new URLSearchParams(url);
   const keys = [...params.keys()];
   if (keys.length === 0) return 0;
   if (params.has('case')) {
-    return Number(params.get('case'));
+    caseOption = Number(params.get('case'));
   }
-  return 0;
+  if (params.has('lang')) {
+    langOption = params.get('lang');
+  }
+}
+
+function isWGSL() {
+  return langOption === 'wgsl';
 }
 
 function acquireBuffer(device, byteSize, usage) {
@@ -132,26 +140,31 @@ function getInputs(M, K, N) {
 }
 
 
+async function ExecuteProgram() {
+  
+}
+
 (async () => {
   if (!navigator.gpu) {
     console.log(
         'WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag.');
     return;
   }
-  let useWGSL = false;
-  //useWGSL = true;
-  const algoSelector = getURLState(window.location.search);
-  let getComputeShaderCode = getComputeShaderCodeGLSL;
-  if (algoSelector == 2) {
-    getComputeShaderCode = getComputeShaderCodeGLSL2;
-  } else if (algoSelector == 100) {
-    getComputeShaderCode = getComputeShaderCodeWGSL;
+  var glslFuncs = {
+    0: getComputeShaderCodeGLSL,
+    1: getComputeShaderCodeGLSL1,
+  };
+  var wgslFuncs = {
+    0: getComputeShaderCodeWGSL,
+  };
+  getURLState(window.location.search);
+  let useWGSL = isWGSL();
+  var getComputeShaderCode;
+  if (useWGSL) {
+    getComputeShaderCode = wgslFuncs[caseOption];
+  } else {
+    getComputeShaderCode = glslFuncs[caseOption];
   }
-  //getComputeShaderCode = getComputeShaderCodeWGSL;
-  if (algoSelector >= 100) {
-    useWGSL = true;
-  }
-
   const adapter = await navigator.gpu.requestAdapter();
   const device = await adapter.requestDevice();
 
