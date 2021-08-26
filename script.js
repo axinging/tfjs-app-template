@@ -123,8 +123,6 @@ function makeUniformsDataView(device, uniformsDataView) {
   };
 }
 
-
-
 async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   var glslFuncs = {
     0: getComputeShaderCodeGLSL,

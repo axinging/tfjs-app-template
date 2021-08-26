@@ -20,8 +20,19 @@ export function getComputeShaderCodeGLSL(workGroupSize) {
       float NAN; ivec4 aShape; ivec4 bShape; ivec4 outShape;
     };
 
+    float binaryOperation1(float a, float b) {
+      return a + b;
+    }
+
     float binaryOperation(float a, float b) {
-      return a+b;
+      if((a < 0.0) && (floor(b) < b)){
+        return NAN;
+      }
+      if (b == 0.0) {
+        return 1.0;
+      }
+      return (round(mod(b, 2.0)) != 1) ?
+        pow(abs(a), b) : sign(a) * pow(abs(a), b);
     }
 
     void main() {
@@ -44,10 +55,23 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
       [[group(0), binding(2)]] var<storage, write> resultMatrix : Matrix;
       [[group(0), binding(3)]] var<uniform> uniforms : Uniforms;
    
-      fn binaryOperation(a : f32, b : f32) -> f32 {
+      fn binaryOperation1(a : f32, b : f32) -> f32 {
         return a + b;
       }
   
+      fn binaryOperation(a : f32, b : f32) -> f32 {
+        if(a < 0.0 && floor(b) < b) {
+          return f32(uniforms.NAN);
+        }
+        if (b == 0.0) {
+          return 1.0;
+        }
+        if (i32(round(b % 2.0)) != 1) {
+          return pow(abs(a), b);
+        }
+        return sign(a) * pow(abs(a), b);
+      }
+
       [[stage(compute), workgroup_size(${workGroupSize[0]}, ${workGroupSize[1]}, ${workGroupSize[2]})]]
       fn main([[builtin(global_invocation_id)]] globalId : vec3<u32>) {
         let index : u32 = globalId.x;
