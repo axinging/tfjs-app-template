@@ -138,7 +138,7 @@ function getInputs(M, K, N) {
 }
 
 
-async function executeProgram(
+async function executeMatmul(
     device, firstMatrix, secondMatrix, M, N, K, useWGSL) {
   var glslFuncs = {
     0: getComputeShaderCodeGLSL,
@@ -310,12 +310,14 @@ async function getDevice() {
   const M = 16, N = M, K = M;
   const [firstMatrix, secondMatrix] = getInputs(M, K, N);
   let useWGSL = getURLState(window.location.search);
-  const arrayBuffer = await executeProgram(
-      device, firstMatrix, secondMatrix, M, N, K, useWGSL);
-  console.log(new Float32Array(arrayBuffer));
   {
-    const arrayBuffer = await executeProgram(
-      device, firstMatrix, secondMatrix, M, N, K, true);
+    const arrayBuffer = await executeMatmul(
+        device, firstMatrix, secondMatrix, M, N, K, useWGSL);
+    console.log(new Float32Array(arrayBuffer));
+  }
+  {
+    const arrayBuffer =
+        await executeMatmul(device, firstMatrix, secondMatrix, M, N, K, true);
     console.log(new Float32Array(arrayBuffer));
   }
 })();
