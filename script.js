@@ -1,5 +1,5 @@
 // https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
-import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.12/dist/web-devel/glslang.js';
+import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.15/dist/web-devel/glslang.js';
 // import glslangInit from './glslang.js';
 // import glslangInit from '@webgpu/glslang/dist/web-devel/glslang.onefile';
 import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from './shader.js';
