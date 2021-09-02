@@ -1,5 +1,6 @@
 import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.15/dist/web-devel/glslang.js';
-import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from './shader.js';
+// import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from
+// './shader.js';
 const useAutoLayout = false;
 
 let langOption = 'wgsl';
@@ -8,7 +9,7 @@ let caseOption = 0;
 function getURLState(url) {
   let params = new URLSearchParams(url);
   const keys = [...params.keys()];
-  if (keys.length === 0) return true;
+  if (keys.length === 0) return false;
   if (params.has('case')) {
     caseOption = Number(params.get('case'));
   }
@@ -179,45 +180,11 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
 
   // Bind group layout and bind group
   let computeCode = getComputeShaderCode(workgroupSize);
-  let module =
-        device.createShaderModule({code: await getModuleCode(computeCode, useWGSL)}, 'compute');
+  let module = device.createShaderModule(
+      {code: await getModuleCode(computeCode, useWGSL)}, 'compute');
 
-  let computePipeline;
-  const pipelineConstant = {
-    0: false,  // "has_point_light"
-    1: 300.0,  // "specular_param"
-  }
-  let bindGroupLayout;
-  if (useWGSL) {
-    if (useAutoLayout) {
-      computePipeline = device.createComputePipeline({
-        compute:
-            {module: module, entryPoint: 'main', constants: pipelineConstant}
-      });
-      bindGroupLayout = computePipeline.getBindGroupLayout(0);
-    } else {
-      bindGroupLayout = getBindGroupLayout(device);
-      computePipeline = device.createComputePipeline({
-        layout: device.createPipelineLayout(
-            {bindGroupLayouts: [bindGroupLayout]}),
-        compute: {module: module, entryPoint: 'main', constants: pipelineConstant}
-      });
-    }
-  }
-  else {
-    if (useAutoLayout) {
-      computePipeline = device.createComputePipeline(
-          {compute: {module: module, entryPoint: 'main'}});
-      bindGroupLayout = computePipeline.getBindGroupLayout(0);
-    } else {
-      bindGroupLayout = getBindGroupLayout(device);
-      computePipeline = device.createComputePipeline({
-        layout: device.createPipelineLayout(
-            {bindGroupLayouts: [bindGroupLayout]}),
-        compute: {module: module, entryPoint: 'main'}
-      });
-    }
-  }
+  const [computePipeline, bindGroupLayout] =
+      getComputePipeline(device, module, useWGSL);
 
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
@@ -301,7 +268,48 @@ async function getModuleCode(computeCode, useWGSL) {
     return computeCode;
   }
   const glslang = await glslangInit();
-  return glslang.compileGLSL(computeCode);
+  return glslang.compileGLSL(computeCode, 'compute');
+}
+
+function getComputePipeline(device, module, useWGSL) {
+  let computePipeline;
+  let bindGroupLayout;
+  const pipelineConstant = {
+    0: false,  // "has_point_light"
+    1: 300.0,  // "specular_param"
+  };
+  if (useWGSL) {
+    if (useAutoLayout) {
+      computePipeline = device.createComputePipeline({
+        compute:
+            {module: module, entryPoint: 'main', constants: pipelineConstant}
+      });
+      bindGroupLayout = computePipeline.getBindGroupLayout(0);
+    } else {
+      bindGroupLayout = getBindGroupLayout(device);
+      computePipeline = device.createComputePipeline({
+        layout:
+            device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
+        compute:
+            {module: module, entryPoint: 'main', constants: pipelineConstant}
+      });
+    }
+  }
+  else {
+    if (useAutoLayout) {
+      computePipeline = device.createComputePipeline(
+          {compute: {module: module, entryPoint: 'main'}});
+      bindGroupLayout = computePipeline.getBindGroupLayout(0);
+    } else {
+      bindGroupLayout = getBindGroupLayout(device);
+      computePipeline = device.createComputePipeline({
+        layout:
+            device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
+        compute: {module: module, entryPoint: 'main'}
+      });
+    }
+  }
+  return [computePipeline, bindGroupLayout];
 }
 
 function getBindGroupLayout(device) {
@@ -331,3 +339,86 @@ function getBindGroupLayout(device) {
   });
 }
 
+export function getComputeShaderCodeGLSL(workGroupSize) {
+  return `#version 450
+    layout (local_size_x = ${workGroupSize[0]},
+    local_size_y = ${workGroupSize[1]},
+    local_size_z = ${workGroupSize[2]}) in;
+
+    layout(std430, set = 0, binding = 0) readonly buffer FirstMatrix {
+      float numbers[];
+    } firstMatrix;
+
+    layout(std430, set = 0, binding = 1) readonly buffer SecondMatrix {
+      float numbers[];
+    } secondMatrix;
+
+    layout(std430, set = 0, binding = 2) buffer ResultMatrix {
+      float numbers[];
+    } resultMatrix;
+
+    layout(std140, set = 0, binding = 3) uniform Uniforms {
+      float NAN; ivec4 aShape; ivec4 bShape; ivec4 outShape;
+    };
+
+    float binaryOperation1(float a, float b) {
+      return a + b;
+    }
+
+    float binaryOperation(float a, float b) {
+      if((a < 0.0) && (floor(b) < b)){
+        return NAN;
+      }
+      if (b == 0.0) {
+        return 1.0;
+      }
+      return (round(mod(b, 2.0)) != 1) ?
+        pow(abs(a), b) : sign(a) * pow(abs(a), b);
+    }
+
+    void main() {
+      int index = int(gl_GlobalInvocationID.x);
+      resultMatrix.numbers[index] = binaryOperation(firstMatrix.numbers[index], secondMatrix.numbers[index]);
+    }
+`;
+}
+export function getComputeShaderCodeWGSL(workGroupSize) {
+  return `
+      // [[override(0)]] let has_point_light: bool = true; // Algorithmic control.
+      // [[override(1)]] let specular_param: f32 = 2.3;    // Numeric control.
+      [[block]] struct Uniforms { NAN : u32; xShape : vec4<u32>; wShape : vec4<u32>; outShape : vec4<u32>;};
+
+      [[block]] struct Matrix {
+        numbers: array<f32>;
+      };
+
+      [[group(0), binding(0)]] var<storage, read> firstMatrix : Matrix;
+      [[group(0), binding(1)]] var<storage, read> secondMatrix : Matrix;
+      [[group(0), binding(2)]] var<storage, write> resultMatrix : Matrix;
+      [[group(0), binding(3)]] var<uniform> uniforms : Uniforms;
+
+      fn binaryOperation(a : f32, b : f32) -> f32 {
+        return a + b;
+      }
+
+      fn binaryOperationPow(a : f32, b : f32) -> f32 {
+        if(a < 0.0 && floor(b) < b) {
+          return f32(uniforms.NAN);
+        }
+        if (b == 0.0) {
+          return 1.0;
+        }
+        if (i32(round(b % 2.0)) != 1) {
+          return pow(abs(a), b);
+        }
+        return sign(a) * pow(abs(a), b);
+      }
+
+      [[stage(compute), workgroup_size(${workGroupSize[0]}, ${
+      workGroupSize[1]}, ${workGroupSize[2]})]]
+      fn main([[builtin(global_invocation_id)]] globalId : vec3<u32>) {
+        let index : u32 = globalId.x;
+        resultMatrix.numbers[index] = binaryOperation(firstMatrix.numbers[index], secondMatrix.numbers[index]);// + specular_param;
+      }
+  `;
+}
