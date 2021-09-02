@@ -1,10 +1,6 @@
-// https://developers.google.com/web/updates/2019/08/get-started-with-gpu-compute-on-the-web
 import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.15/dist/web-devel/glslang.js';
-// import glslangInit from './glslang.js';
-// import glslangInit from '@webgpu/glslang/dist/web-devel/glslang.onefile';
 import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from './shader.js';
 const useAutoLayout = false;
-// when useAutoLayout is true, complains: numBindings mismatch
 
 let langOption = 'glsl';
 let caseOption = 0;
@@ -147,7 +143,6 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   gpuBufferFirstMatrix.unmap();
 
   // Second Matrix
-
   const gpuBufferSecondMatrix = device.createBuffer({
     mappedAtCreation: true,
     size: secondMatrix.byteLength,
@@ -157,8 +152,8 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   new Float32Array(arrayBufferSecondMatrix).set(secondMatrix);
   gpuBufferSecondMatrix.unmap();
   const workgroupSize = [size, 1, 1];
-  // Result Matrix
 
+  // Result Matrix
   const resultMatrixBufferSize = Float32Array.BYTES_PER_ELEMENT * (size);
   const resultMatrixBuffer = device.createBuffer({
     size: resultMatrixBufferSize,
