@@ -41,9 +41,10 @@ export function getComputeShaderCodeGLSL(workGroupSize) {
     }
 `;
 }
-
 export function getComputeShaderCodeWGSL(workGroupSize) { 
     return `
+      [[override(0)]] let has_point_light: bool = true; // Algorithmic control.
+      [[override(1)]] let specular_param: f32 = 2.3;    // Numeric control.
       [[block]] struct Uniforms { NAN : u32; xShape : vec4<u32>; wShape : vec4<u32>; outShape : vec4<u32>;};
   
       [[block]] struct Matrix {
@@ -55,11 +56,11 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
       [[group(0), binding(2)]] var<storage, write> resultMatrix : Matrix;
       [[group(0), binding(3)]] var<uniform> uniforms : Uniforms;
    
-      fn binaryOperation1(a : f32, b : f32) -> f32 {
+      fn binaryOperation(a : f32, b : f32) -> f32 {
         return a + b;
       }
   
-      fn binaryOperation(a : f32, b : f32) -> f32 {
+      fn binaryOperationPow(a : f32, b : f32) -> f32 {
         if(a < 0.0 && floor(b) < b) {
           return f32(uniforms.NAN);
         }
@@ -75,7 +76,7 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
       [[stage(compute), workgroup_size(${workGroupSize[0]}, ${workGroupSize[1]}, ${workGroupSize[2]})]]
       fn main([[builtin(global_invocation_id)]] globalId : vec3<u32>) {
         let index : u32 = globalId.x;
-        resultMatrix.numbers[index] = binaryOperation(firstMatrix.numbers[index], secondMatrix.numbers[index]);
+        resultMatrix.numbers[index] = binaryOperation(firstMatrix.numbers[index], secondMatrix.numbers[index]) + specular_param;
       }
   `;
     }

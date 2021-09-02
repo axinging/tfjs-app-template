@@ -2,13 +2,13 @@ import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.15/dist/web-devel
 import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from './shader.js';
 const useAutoLayout = false;
 
-let langOption = 'glsl';
+let langOption = 'wgsl';
 let caseOption = 0;
 
 function getURLState(url) {
   let params = new URLSearchParams(url);
   const keys = [...params.keys()];
-  if (keys.length === 0) return 0;
+  if (keys.length === 0) return true;
   if (params.has('case')) {
     caseOption = Number(params.get('case'));
   }
@@ -178,56 +178,47 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   const uniformBuffer = makeUniformsDataView(device, uniformsDataView);
 
   // Bind group layout and bind group
-  let bindGroupLayout;
-  if (useAutoLayout == false) {
-    bindGroupLayout = device.createBindGroupLayout({
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {type: 'read-only-storage'}
-        },
-        {
-          binding: 1,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {type: 'read-only-storage'}
-        },
-        {
-          binding: 2,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {type: 'storage'}
-        },
-        {
-          binding: 3,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {type: 'uniform'}
-        }
-      ]
-    });
-  }
+  let computeCode = getComputeShaderCode(workgroupSize);
+  let module =
+        device.createShaderModule({code: await getModuleCode(computeCode, useWGSL)}, 'compute');
+
   let computePipeline;
-  let module;
+  const pipelineConstant = {
+    0: false,  // "has_point_light"
+    1: 300.0,  // "specular_param"
+  }
+  let bindGroupLayout;
   if (useWGSL) {
-    module =
-        device.createShaderModule({code: getComputeShaderCode(workgroupSize)});
-  } else {
-    const glslang = await glslangInit();
-    module = device.createShaderModule({
-      code: glslang.compileGLSL(getComputeShaderCode(workgroupSize), 'compute')
-    })
+    if (useAutoLayout) {
+      computePipeline = device.createComputePipeline({
+        compute:
+            {module: module, entryPoint: 'main', constants: pipelineConstant}
+      });
+      bindGroupLayout = computePipeline.getBindGroupLayout(0);
+    } else {
+      bindGroupLayout = getBindGroupLayout(device);
+      computePipeline = device.createComputePipeline({
+        layout: device.createPipelineLayout(
+            {bindGroupLayouts: [bindGroupLayout]}),
+        compute: {module: module, entryPoint: 'main', constants: pipelineConstant}
+      });
+    }
+  }
+  else {
+    if (useAutoLayout) {
+      computePipeline = device.createComputePipeline(
+          {compute: {module: module, entryPoint: 'main'}});
+      bindGroupLayout = computePipeline.getBindGroupLayout(0);
+    } else {
+      bindGroupLayout = getBindGroupLayout(device);
+      computePipeline = device.createComputePipeline({
+        layout: device.createPipelineLayout(
+            {bindGroupLayouts: [bindGroupLayout]}),
+        compute: {module: module, entryPoint: 'main'}
+      });
+    }
   }
 
-  if (useAutoLayout) {
-    computePipeline = device.createComputePipeline(
-        {compute: {module: module, entryPoint: 'main'}});
-    bindGroupLayout = computePipeline.getBindGroupLayout(0);
-  } else {
-    computePipeline = device.createComputePipeline({
-      layout:
-          device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
-      compute: {module: module, entryPoint: 'main'}
-    });
-  }
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
     entries: [
@@ -239,7 +230,6 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   });
 
   // Commands submission
-
   const commandEncoder = device.createCommandEncoder();
 
   const passEncoder = commandEncoder.beginComputePass();
@@ -299,9 +289,45 @@ async function getDevice() {
         await executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL);
     console.log(new Float32Array(arrayBuffer));
   }
-  {
-    const arrayBuffer =
-        await executeMatmul(device, firstMatrix, secondMatrix, size, true);
-    console.log(new Float32Array(arrayBuffer));
-  }
+  //{
+  //  const arrayBuffer =
+  //      await executeMatmul(device, firstMatrix, secondMatrix, size, true);
+  //  console.log(new Float32Array(arrayBuffer));
+  //}
 })();
+
+async function getModuleCode(computeCode, useWGSL) {
+  if (useWGSL) {
+    return computeCode;
+  }
+  const glslang = await glslangInit();
+  return glslang.compileGLSL(computeCode);
+}
+
+function getBindGroupLayout(device) {
+  return device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {type: 'read-only-storage'}
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {type: 'read-only-storage'}
+      },
+      {
+        binding: 2,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {type: 'storage'}
+      },
+      {
+        binding: 3,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {type: 'uniform'}
+      }
+    ]
+  });
+}
+
