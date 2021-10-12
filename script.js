@@ -1,7 +1,7 @@
 import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.15/dist/web-devel/glslang.js';
 // import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from
 // './shader.js';
-const useAutoLayout = false;
+const useAutoLayout = true;
 
 let langOption = 'wgsl';
 let caseOption = 0;
@@ -401,6 +401,7 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
         return a + b;
       }
 
+      // If uniforms is not used, will complain: Number of entries (4) did not match the number of entries (3) specified in [BindGroupLayout]
       fn binaryOperationPow(a : f32, b : f32) -> f32 {
         if(a < 0.0 && floor(b) < b) {
           return f32(uniforms.NAN);

@@ -1,6 +1,3 @@
-import glslangInit from 'https://unpkg.com/@webgpu/glslang@0.0.15/dist/web-devel/glslang.js';
-// import {getComputeShaderCodeGLSL, getComputeShaderCodeWGSL} from
-// './shader.js';
 const useAutoLayout = true;
 
 let langOption = 'wgsl';
@@ -121,18 +118,13 @@ function makeUniformsDataView(device, uniformsDataView) {
 }
 
 async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
-  var glslFuncs = {
-    0: getComputeShaderCodeGLSL,
-  };
   var wgslFuncs = {
     0: getComputeShaderCodeWGSL,
   };
   var getComputeShaderCode;
   if (useWGSL) {
     getComputeShaderCode = wgslFuncs[caseOption];
-  } else {
-    getComputeShaderCode = glslFuncs[caseOption];
-  }
+  } 
   // First matrix.
   const gpuBufferFirstMatrix = device.createBuffer({
     mappedAtCreation: true,
@@ -250,7 +242,7 @@ async function getDevice() {
 
   const secondMatrix = new Float32Array([0, 2, 4, NaN, NaN, 5, 6, NaN]);
 
-  let useWGSL = getURLState(window.location.search);
+  let useWGSL = true;//getURLState(window.location.search);
   {
     const arrayBuffer =
         await executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL);
@@ -278,95 +270,15 @@ function getComputePipeline(device, module, useWGSL) {
     0: false,  // "has_point_light"
     1: 300.0,  // "specular_param"
   };
-  if (useWGSL) {
-    if (useAutoLayout) {
-      computePipeline = device.createComputePipeline({
-        compute:
-            {module: module, entryPoint: 'main', constants: pipelineConstant}
-      });
-      bindGroupLayout = computePipeline.getBindGroupLayout(0);
-    } 
-  }
-  else {
-    if (useAutoLayout) {
-      computePipeline = device.createComputePipeline(
-          {compute: {module: module, entryPoint: 'main'}});
-      bindGroupLayout = computePipeline.getBindGroupLayout(0);
-    } 
-  }
+  computePipeline = device.createComputePipeline({
+    compute:
+        {module: module, entryPoint: 'main', constants: pipelineConstant}
+  });
+  bindGroupLayout = computePipeline.getBindGroupLayout(0);
   return [computePipeline, bindGroupLayout];
 }
 
-function getBindGroupLayout(device) {
-  return device.createBindGroupLayout({
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {type: 'read-only-storage'}
-      },
-      {
-        binding: 1,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {type: 'read-only-storage'}
-      },
-      {
-        binding: 2,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {type: 'storage'}
-      },
-      {
-        binding: 3,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: {type: 'uniform'}
-      }
-    ]
-  });
-}
 
-export function getComputeShaderCodeGLSL(workGroupSize) {
-  return `#version 450
-    layout (local_size_x = ${workGroupSize[0]},
-    local_size_y = ${workGroupSize[1]},
-    local_size_z = ${workGroupSize[2]}) in;
-
-    layout(std430, set = 0, binding = 0) readonly buffer FirstMatrix {
-      float numbers[];
-    } firstMatrix;
-
-    layout(std430, set = 0, binding = 1) readonly buffer SecondMatrix {
-      float numbers[];
-    } secondMatrix;
-
-    layout(std430, set = 0, binding = 2) buffer ResultMatrix {
-      float numbers[];
-    } resultMatrix;
-
-    layout(std140, set = 0, binding = 3) uniform Uniforms {
-      float NAN; ivec4 aShape; ivec4 bShape; ivec4 outShape;
-    };
-
-    float binaryOperation1(float a, float b) {
-      return a + b;
-    }
-
-    float binaryOperation(float a, float b) {
-      if((a < 0.0) && (floor(b) < b)){
-        return NAN;
-      }
-      if (b == 0.0) {
-        return 1.0;
-      }
-      return (round(mod(b, 2.0)) != 1) ?
-        pow(abs(a), b) : sign(a) * pow(abs(a), b);
-    }
-
-    void main() {
-      int index = int(gl_GlobalInvocationID.x);
-      resultMatrix.numbers[index] = binaryOperation(firstMatrix.numbers[index], secondMatrix.numbers[index]);
-    }
-`;
-}
 export function getComputeShaderCodeWGSL(workGroupSize) {
   return `
       // [[override(0)]] let has_point_light: bool = true; // Algorithmic control.
@@ -386,6 +298,7 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
         return a + b;
       }
 
+      // If uniforms is not used, will complain: Number of entries (4) did not match the number of entries (3) specified in [BindGroupLayout]
       fn binaryOperationPow(a : f32, b : f32) -> f32 {
         if(a < 0.0 && floor(b) < b) {
           return f32(uniforms.NAN);
@@ -403,7 +316,7 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
       workGroupSize[1]}, ${workGroupSize[2]})]]
       fn main([[builtin(global_invocation_id)]] globalId : vec3<u32>) {
         let index : u32 = globalId.x;
-        resultMatrix.numbers[index] = binaryOperation(firstMatrix.numbers[index], secondMatrix.numbers[index]);// + specular_param;
+        resultMatrix.numbers[index] = binaryOperationPow(firstMatrix.numbers[index], secondMatrix.numbers[index]);// + specular_param;
       }
   `;
 }
