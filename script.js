@@ -120,6 +120,11 @@ function makeUniformsDataView(device, uniformsDataView) {
   };
 }
 
+function defaultGpuBufferUsage() {
+  return GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC |
+      GPUBufferUsage.COPY_DST;
+}
+
 async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   console.time("executeMatmul");
   var glslFuncs = {
@@ -153,6 +158,11 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   const arrayBufferSecondMatrix = gpuBufferSecondMatrix.getMappedRange();
   new Float32Array(arrayBufferSecondMatrix).set(secondMatrix);
   gpuBufferSecondMatrix.unmap();
+/*
+this.queue.writeBuffer(
+          info.bufferInfo.buffer, 0, info.values as ArrayBuffer);
+*/
+
   const workgroupSize = [size, 1, 1];
 
   // Result Matrix
@@ -469,12 +479,9 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
       workGroupSize[1]}, ${workGroupSize[2]})]]
       fn main([[builtin(global_invocation_id)]] globalId : vec3<u32>) {
         let index : u32 = globalId.x;
-        if (index == 0u) {
-          resultMatrix.numbers[0u] = binaryOperation(firstMatrix.numbers[index], secondMatrix.numbers[index]);
-        }
-        if (index == 1u) {
-          resultMatrix.numbers[1u] = binaryOperation2(firstMatrix.numbers[index], secondMatrix.numbers[index]);
-        }
+        // Avoid uniforms.NAN warning.
+        binaryOperationPow(1.0,2.0);
+        resultMatrix.numbers[index] = firstMatrix.numbers[index] + secondMatrix.numbers[index];
       }
   `;
 }
