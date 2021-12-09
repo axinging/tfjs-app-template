@@ -9,7 +9,7 @@ let caseOption = 0;
 function getURLState(url) {
   let params = new URLSearchParams(url);
   const keys = [...params.keys()];
-  if (keys.length === 0) return false;
+  if (keys.length === 0) return true;
   if (params.has('case')) {
     caseOption = Number(params.get('case'));
   }
@@ -121,6 +121,7 @@ function makeUniformsDataView(device, uniformsDataView) {
 }
 
 async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
+  console.time("executeMatmul");
   var glslFuncs = {
     0: getComputeShaderCodeGLSL,
   };
@@ -180,9 +181,10 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
 
   // Bind group layout and bind group
   let computeCode = getComputeShaderCode(workgroupSize);
+  const compile_before = performance.now();
   let module = device.createShaderModule(
-      {code: await getModuleCode(computeCode, useWGSL)}, 'compute');
-
+      {code: await getModuleCode(computeCode, useWGSL), label: "ProgramName"}, 'compute');
+  console.log("createShaderModule = " + (performance.now() - compile_before));
   const [computePipeline, bindGroupLayout] =
       getComputePipeline(device, module, useWGSL);
 
@@ -228,6 +230,7 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
 
   // Read buffer.
   await gpuReadBuffer.mapAsync(GPUMapMode.READ);
+  console.timeEnd("executeMatmul");
   return gpuReadBuffer.getMappedRange();
 }
 
@@ -244,11 +247,15 @@ async function getDevice() {
 (async () => {
   const device = await getDevice();
 
-  // First Matrix
-  const size = 8;
-  const firstMatrix = new Float32Array([1, 2, 3, NaN, 4, 5, 7, NaN]);
-
-  const secondMatrix = new Float32Array([0, 2, 4, NaN, NaN, 5, 6, NaN]);
+  const batch = 1;//262145;
+  const size = batch * 4 * 4 * 1;
+  const firstMatrix = new Float32Array(size);
+  const secondMatrix = new Float32Array(size);
+  for (let i = 0; i < size; i++) {
+    firstMatrix[i] = i;
+    secondMatrix[i] = i;
+  }
+  
 
   let useWGSL = getURLState(window.location.search);
   {
@@ -256,11 +263,6 @@ async function getDevice() {
         await executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL);
     console.log(new Float32Array(arrayBuffer));
   }
-  //{
-  //  const arrayBuffer =
-  //      await executeMatmul(device, firstMatrix, secondMatrix, size, true);
-  //  console.log(new Float32Array(arrayBuffer));
-  //}
 })();
 
 async function getModuleCode(computeCode, useWGSL) {
@@ -272,6 +274,7 @@ async function getModuleCode(computeCode, useWGSL) {
 }
 
 function getComputePipeline(device, module, useWGSL) {
+  console.time("getComputePipeline");
   let computePipeline;
   let bindGroupLayout;
   const pipelineConstant = {
@@ -280,10 +283,12 @@ function getComputePipeline(device, module, useWGSL) {
   };
   if (useWGSL) {
     if (useAutoLayout) {
+      const compile_before = performance.now();
       computePipeline = device.createComputePipeline({
         compute:
             {module: module, entryPoint: 'main', constants: pipelineConstant}
       });
+      console.log("wgsl createComputePipeline = "+ (performance.now() - compile_before));
       bindGroupLayout = computePipeline.getBindGroupLayout(0);
     } else {
       bindGroupLayout = getBindGroupLayout(device);
@@ -297,9 +302,11 @@ function getComputePipeline(device, module, useWGSL) {
   }
   else {
     if (useAutoLayout) {
+      const compile_before = performance.now();
       computePipeline = device.createComputePipeline(
           {compute: {module: module, entryPoint: 'main'}});
       bindGroupLayout = computePipeline.getBindGroupLayout(0);
+      console.log("glsl createComputePipeline = "+ (performance.now() - compile_before));
     } else {
       bindGroupLayout = getBindGroupLayout(device);
       computePipeline = device.createComputePipeline({
@@ -309,6 +316,7 @@ function getComputePipeline(device, module, useWGSL) {
       });
     }
   }
+  console.timeEnd("getComputePipeline");
   return [computePipeline, bindGroupLayout];
 }
 
@@ -396,9 +404,51 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
       [[group(0), binding(1)]] var<storage, read> secondMatrix : Matrix;
       [[group(0), binding(2)]] var<storage, write> resultMatrix : Matrix;
       [[group(0), binding(3)]] var<uniform> uniforms : Uniforms;
+      let a0 = 2147483600;
+      let b0 = 47;
+
+      fn dotVec4I32(a : vec4<i32>, b : vec4<i32>) -> i32 {
+        /*
+        var result = 0;
+        for (var i = 0; i < 4; i = i + 1) {
+          result = result + a[i]*b[i];
+        }
+        */
+        return dot(a, b);
+      }
+    
+      fn getFlatIndex4D(coords : vec4<i32>, shape : vec4<i32>) -> i32 {
+        return i32(dotVec4I32(coords,
+            vec4<i32>(shape.y * shape.z * shape.w, shape.z * shape.w, shape.w, 1)));
+      }
+
+      fn getFlatIndex4D2(coords : vec4<i32>, shape : vec4<i32>) -> i32 {
+        return i32(dot(vec4<f32>(coords), vec4<f32>(
+          f32(shape.y) * f32(shape.z) * f32(shape.w), f32(shape.z) * f32(shape.w), f32(shape.w), 1.0)));
+      }  
 
       fn binaryOperation(a : f32, b : f32) -> f32 {
-        return a + b;
+        //let a = vec4<i32>(1);
+        if(a < 0.0 && floor(b) < b) {
+          return f32(uniforms.NAN);
+        }
+        let index = getFlatIndex4D(vec4<i32>(263169,4,4,4),vec4<i32>(263169,4,4,4));
+        // return a + b + f32(id);
+        //const baseSize = 263169;
+        //const size = baseSize * 4 * 4 * 4;
+        return f32(a0)+f32(b0);
+      }
+
+      fn binaryOperation2(a : f32, b : f32) -> f32 {
+        //let a = vec4<i32>(1);
+        if(a < 0.0 && floor(b) < b) {
+          return f32(uniforms.NAN);
+        }
+        let index = getFlatIndex4D2(vec4<i32>(263169,4,4,4),vec4<i32>(263169,4,4,4));
+        // return a + b + f32(id);
+        //const baseSize = 263169;
+        //const size = baseSize * 4 * 4 * 4;
+        return f32(a0+b0);
       }
 
       // If uniforms is not used, will complain: Number of entries (4) did not match the number of entries (3) specified in [BindGroupLayout]
@@ -414,12 +464,17 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
         }
         return sign(a) * pow(abs(a), b);
       }
-
+      
       [[stage(compute), workgroup_size(${workGroupSize[0]}, ${
       workGroupSize[1]}, ${workGroupSize[2]})]]
       fn main([[builtin(global_invocation_id)]] globalId : vec3<u32>) {
         let index : u32 = globalId.x;
-        resultMatrix.numbers[index] = binaryOperation(firstMatrix.numbers[index], secondMatrix.numbers[index]);// + specular_param;
+        if (index == 0u) {
+          resultMatrix.numbers[0u] = binaryOperation(firstMatrix.numbers[index], secondMatrix.numbers[index]);
+        }
+        if (index == 1u) {
+          resultMatrix.numbers[1u] = binaryOperation2(firstMatrix.numbers[index], secondMatrix.numbers[index]);
+        }
       }
   `;
 }
