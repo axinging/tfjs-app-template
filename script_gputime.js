@@ -227,8 +227,6 @@ async function getTimeFromQuerySet(device, querySet) {
   return [timeElapsedNanos, start, end];
 }
 
-var commandEncoder = null;
-
 async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   // console.time("executeMatmul");
   var glslFuncs = {
@@ -258,7 +256,7 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
     count: 2,
   });
   const [gpuBufferFirstMatrix, gpuBufferSecondMatrix] =
-      upload2(device, firstMatrix, secondMatrix);
+      upload(device, firstMatrix, secondMatrix);
 
   const workgroupSize = [4, 1, 1];
 
@@ -308,7 +306,7 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   });
 
   // Commands submission
-  commandEncoder = device.createCommandEncoder();
+  var commandEncoder = device.createCommandEncoder();
 
   const passEncoder = commandEncoder.beginComputePass();
   passEncoder.writeTimestamp(querySet, 0);
@@ -318,11 +316,38 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   passEncoder.writeTimestamp(querySet, 1);
   passEncoder.endPass();
 
+
+  // Submit GPU commands.
+  const gpuCommands = commandEncoder.finish();
+  device.queue.submit([gpuCommands]);
+  commandEncoder = null;
+
+  gpuBufferFirstMatrix.destroy();
+  gpuBufferSecondMatrix.destroy();
+  
+
+  await getTimeFromQuerySet(device, querySet);
+
+  // Read buffer.
+  /*
+  await gpuReadBuffer.mapAsync(GPUMapMode.READ);
+  console.timeEnd('executeMatmul');
+  return gpuReadBuffer.getMappedRange();
+  */
+  await getBufferData(device, resultMatrixBuffer, resultMatrixBufferSize);
+  resultMatrixBuffer.destroy();
+}
+
+async function getBufferData(
+    device, resultMatrixBuffer, resultMatrixBufferSize) {
+  console.time('getBufferData');
+  // console.log("getBufferData 1");
   // Get a GPU buffer for reading in an unmapped state.
   const gpuReadBuffer = device.createBuffer({
     size: resultMatrixBufferSize,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
   });
+  const commandEncoder = device.createCommandEncoder();
 
   // Encode commands for copying buffer to buffer.
   commandEncoder.copyBufferToBuffer(
@@ -331,23 +356,26 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
       resultMatrixBufferSize /* size */
   );
 
-  // Submit GPU commands.
-  const gpuCommands = commandEncoder.finish();
-  device.queue.submit([gpuCommands]);
-  commandEncoder = null;
-  ;
+  // this.ensureCommandEncoderReady();
+  // this.ensureComputePassEnded();
+  submitQueue(device.queue, commandEncoder);
+  console.timeEnd('getBufferData');
 
+  console.time('mapAsync');
+  const mapPromise = gpuReadBuffer.mapAsync(GPUMapMode.READ);
+  console.timeEnd('mapAsync');
+  console.time('awaitMapAsync');
+  await mapPromise;
+  console.timeEnd('awaitMapAsync');
+  const values = gpuReadBuffer.getMappedRange().slice(0);
+  console.log(JSON.stringify(values));
+  console.log(new Float32Array(values));
 
-  gpuBufferFirstMatrix.destroy();
-  gpuBufferSecondMatrix.destroy();
-  resultMatrixBuffer.destroy();
+  gpuReadBuffer.unmap();
+  // console.log("getBufferData 2");
+  // console.timeEnd("getBufferData");
 
-  await getTimeFromQuerySet(device, querySet);
-
-  // Read buffer.
-  await gpuReadBuffer.mapAsync(GPUMapMode.READ);
-  console.timeEnd('executeMatmul');
-  return gpuReadBuffer.getMappedRange();
+  return values;
 }
 
 async function getDevice() {
@@ -385,7 +413,7 @@ async function getDevice() {
   const device = await getDevice();
 
   for (var j = 0; j < 1; j++) {
-    const batch = 64 * 100000;  // 262145;
+    const batch = 1 * 100000;  // 262145;
     const size = batch * 1;
     // const firstMatrix = new Float32Array(size);
     // const secondMatrix = new Float32Array(size);
