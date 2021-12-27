@@ -153,7 +153,10 @@ function upload(device, firstMatrix, secondMatrix) {
       'uploadWithMap: ' + (start2 - start1).toFixed(3) + ', ' +
       (end - start2).toFixed(3));
   */
-  return [gpuBufferFirstMatrix, gpuBufferSecondMatrix, (start2 - start1).toFixed(3), (end - start2).toFixed(3)];
+  return [
+    gpuBufferFirstMatrix, gpuBufferSecondMatrix, (start2 - start1).toFixed(3),
+    (end - start2).toFixed(3)
+  ];
 }
 
 
@@ -179,8 +182,52 @@ function upload2(device, firstMatrix, secondMatrix) {
       'uploadWithWriteBuffer: ' + (start2 - start1).toFixed(3) + ', ' +
       (end - start2).toFixed(3));
   */
-  return [gpuBufferFirstMatrix, gpuBufferSecondMatrix, (start2 - start1).toFixed(3), (end - start2).toFixed(3)];
+  return [
+    gpuBufferFirstMatrix, gpuBufferSecondMatrix, (start2 - start1).toFixed(3),
+    (end - start2).toFixed(3)
+  ];
 }
+
+function submitQueue(queue, currentCommandEncoder) {
+  // this.ensureComputePassEnded();
+  queue.submit([currentCommandEncoder.finish()]);
+}
+
+async function getTimeFromQuerySet(device, querySet) {
+  const commandEncoder = device.createCommandEncoder();
+
+  // const queryBuffer = this.acquireBuffer(
+  //    16, GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE);
+  const queryBuffer = device.createBuffer({
+    size: 16,
+    usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE
+  });
+
+  // const dst = this.acquireBuffer(
+  // 16, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+
+  const dst = device.createBuffer(
+      {size: 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST});
+
+  // this.ensureCommandEncoderReady();
+  // this.ensureComputePassEnded();
+  commandEncoder.resolveQuerySet(querySet, 0, 2, queryBuffer, 0);
+  commandEncoder.copyBufferToBuffer(queryBuffer, 0, dst, 0, 16);
+  submitQueue(device.queue, commandEncoder);
+  await dst.mapAsync(GPUMapMode.READ);
+  const arrayBuf = new BigUint64Array(dst.getMappedRange());
+  const NS2MS = 1000000;
+  const start = (Number(arrayBuf[0]) / NS2MS);
+  const end = (Number(arrayBuf[1]) / NS2MS);
+  const timeElapsedNanos = end - start;
+  console.log(start + ', ' + end + ',' + timeElapsedNanos);
+  dst.unmap();
+  // Release buffer here.
+  // Return milliseconds.
+  return [timeElapsedNanos, start, end];
+}
+
+var commandEncoder = null;
 
 async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   // console.time("executeMatmul");
@@ -198,14 +245,18 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   }
   /*
   for (var i = 0; i < 1; i++) {
-    const [gpuBufferFirstMatrix1, gpuBufferSecondMatrix2, time1, time2] = upload(device, firstMatrix, secondMatrix);
-    const [gpuBufferFirstMatrixWB1, gpuBufferSecondMatrixWB2, timeWB1, timeWB2] = upload2(device, firstMatrix, secondMatrix);
-    console.log("Size: " + size*4+
-      '   upload: ' + time1 + ', ' +time2 +
-      '   uploadWithWriteBuffer: ' + timeWB1 + ', ' +timeWB2);
+    const [gpuBufferFirstMatrix1, gpuBufferSecondMatrix2, time1, time2] =
+  upload(device, firstMatrix, secondMatrix); const [gpuBufferFirstMatrixWB1,
+  gpuBufferSecondMatrixWB2, timeWB1, timeWB2] = upload2(device, firstMatrix,
+  secondMatrix); console.log("Size: " + size*4+ '   upload: ' + time1 + ', '
+  +time2 + '   uploadWithWriteBuffer: ' + timeWB1 + ', ' +timeWB2);
   }
   return;
   */
+  const querySet = device.createQuerySet({
+    type: 'timestamp',
+    count: 2,
+  });
   const [gpuBufferFirstMatrix, gpuBufferSecondMatrix] =
       upload2(device, firstMatrix, secondMatrix);
 
@@ -257,12 +308,14 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   });
 
   // Commands submission
-  const commandEncoder = device.createCommandEncoder();
+  commandEncoder = device.createCommandEncoder();
 
   const passEncoder = commandEncoder.beginComputePass();
+  passEncoder.writeTimestamp(querySet, 0);
   passEncoder.setPipeline(computePipeline);
   passEncoder.setBindGroup(0, bindGroup);
-  passEncoder.dispatch(size / 4 /* x */, 4 /* y */);
+  passEncoder.dispatch(size / 256 /* x */, 256 /* y */);
+  passEncoder.writeTimestamp(querySet, 1);
   passEncoder.endPass();
 
   // Get a GPU buffer for reading in an unmapped state.
@@ -281,10 +334,15 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   // Submit GPU commands.
   const gpuCommands = commandEncoder.finish();
   device.queue.submit([gpuCommands]);
+  commandEncoder = null;
+  ;
+
 
   gpuBufferFirstMatrix.destroy();
   gpuBufferSecondMatrix.destroy();
   resultMatrixBuffer.destroy();
+
+  await getTimeFromQuerySet(device, querySet);
 
   // Read buffer.
   await gpuReadBuffer.mapAsync(GPUMapMode.READ);
@@ -298,15 +356,36 @@ async function getDevice() {
         'WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag.');
     return;
   }
-  const adapter = await navigator.gpu.requestAdapter();
-  return await adapter.requestDevice();
+
+  const gpuDescriptor = {powerPreference: 'high-performance'};
+
+  const adapter = await navigator.gpu.requestAdapter(gpuDescriptor);
+  let deviceDescriptor = {};
+  const supportTimeQuery = adapter.features.has('timestamp-query');
+
+  if (supportTimeQuery) {
+    deviceDescriptor = {requiredFeatures: ['timestamp-query']};
+  } else {
+    console.warn(
+        `This device doesn't support timestamp-query extension. ` +
+        `Start Chrome browser with flag ` +
+        `--disable-dawn-features=disallow_unsafe_apis then try again. ` +
+        `Or zero will shown for the kernel time when profiling mode is` +
+        `enabled. Using performance.now is not workable for webgpu since` +
+        `it doesn't support synchronously to read data from GPU.`);
+  }
+  return await adapter.requestDevice(deviceDescriptor);
+  // return new WebGPUBackend(device, supportTimeQuery);
+
+  // adapter = await navigator.gpu.requestAdapter();
+  // return await adapter.requestDevice();
 }
 
 (async () => {
   const device = await getDevice();
 
   for (var j = 0; j < 1; j++) {
-    const batch = 64 * (j + 1);  // 262145;
+    const batch = 64 * 100000;  // 262145;
     const size = batch * 1;
     // const firstMatrix = new Float32Array(size);
     // const secondMatrix = new Float32Array(size);
@@ -314,14 +393,14 @@ async function getDevice() {
     const secondMatrix = new Float32Array(size);
     for (let i = 0; i < size; i++) {
       firstMatrix[i] = i;
-      secondMatrix[i] = i+10;
+      secondMatrix[i] = i + 10;
     }
 
     let useWGSL = getURLState(window.location.search);
     {
-       const arrayBuffer =
-      await executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL);
-       console.log(new Float32Array(arrayBuffer));
+      const arrayBuffer =
+          await executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL);
+      console.log(new Float32Array(arrayBuffer));
     }
   }
 })();
