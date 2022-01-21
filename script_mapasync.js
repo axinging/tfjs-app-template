@@ -193,38 +193,13 @@ function submitQueue(queue, currentCommandEncoder) {
   queue.submit([currentCommandEncoder.finish()]);
 }
 
-async function getTimeFromQuerySet(device, querySet) {
-  const commandEncoder = device.createCommandEncoder();
-
-  // const queryBuffer = this.acquireBuffer(
-  //    16, GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE);
-  const queryBuffer = device.createBuffer({
-    size: 16,
-    usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE
-  });
-
-  // const dst = this.acquireBuffer(
-  // 16, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
-
-  const dst = device.createBuffer(
-      {size: 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST});
-
-  // this.ensureCommandEncoderReady();
-  // this.ensureComputePassEnded();
-  commandEncoder.resolveQuerySet(querySet, 0, 2, queryBuffer, 0);
-  commandEncoder.copyBufferToBuffer(queryBuffer, 0, dst, 0, 16);
-  submitQueue(device.queue, commandEncoder);
-  await dst.mapAsync(GPUMapMode.READ);
-  const arrayBuf = new BigUint64Array(dst.getMappedRange());
-  const NS2MS = 1000000;
-  const start = (Number(arrayBuf[0]) / NS2MS);
-  const end = (Number(arrayBuf[1]) / NS2MS);
-  const timeElapsedNanos = end - start;
-  console.log(start + ', ' + end + ',' + timeElapsedNanos);
-  dst.unmap();
-  // Release buffer here.
-  // Return milliseconds.
-  return [timeElapsedNanos, start, end];
+const LOOP_SIZE = 1000000000;
+function loop(max, tag = '') {
+    var sum = 0;
+    console.log("loop");
+    for (var i = 0; i < max; i++) {
+        sum = sum + Math.sqrt(i);
+    }
 }
 
 async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
@@ -241,16 +216,7 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   } else {
     getComputeShaderCode = glslFuncs[caseOption];
   }
-  /*
-  for (var i = 0; i < 1; i++) {
-    const [gpuBufferFirstMatrix1, gpuBufferSecondMatrix2, time1, time2] =
-  upload(device, firstMatrix, secondMatrix); const [gpuBufferFirstMatrixWB1,
-  gpuBufferSecondMatrixWB2, timeWB1, timeWB2] = upload2(device, firstMatrix,
-  secondMatrix); console.log("Size: " + size*4+ '   upload: ' + time1 + ', '
-  +time2 + '   uploadWithWriteBuffer: ' + timeWB1 + ', ' +timeWB2);
-  }
-  return;
-  */
+
   const querySet = device.createQuerySet({
     type: 'timestamp',
     count: 2,
@@ -309,11 +275,9 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   var commandEncoder = device.createCommandEncoder();
 
   const passEncoder = commandEncoder.beginComputePass();
-  passEncoder.writeTimestamp(querySet, 0);
   passEncoder.setPipeline(computePipeline);
   passEncoder.setBindGroup(0, bindGroup);
   passEncoder.dispatch(size / 256 /* x */, 256 /* y */);
-  passEncoder.writeTimestamp(querySet, 1);
   passEncoder.endPass();
 
 
@@ -325,14 +289,13 @@ async function executeMatmul(device, firstMatrix, secondMatrix, size, useWGSL) {
   gpuBufferFirstMatrix.destroy();
   gpuBufferSecondMatrix.destroy();
   
-  await getTimeFromQuerySet(device, querySet);
-
   // Read buffer.
   await getBufferData(device, resultMatrixBuffer, resultMatrixBufferSize);
+  loop(LOOP_SIZE);
   resultMatrixBuffer.destroy();
-
-  await getTimeFromQuerySet(device, querySet);
 }
+
+
 
 async function getBufferData(
     device, resultMatrixBuffer, resultMatrixBufferSize) {
@@ -368,8 +331,6 @@ async function getBufferData(
   console.log(new Float32Array(values));
 
   gpuReadBuffer.unmap();
-  // console.log("getBufferData 2");
-  // console.timeEnd("getBufferData");
 
   return values;
 }
@@ -557,7 +518,7 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
       // [[override(1)]] let specular_param: f32 = 2.3;    // Numeric control.
       struct Uniforms { NAN : u32; xShape : vec4<u32>; wShape : vec4<u32>; outShape : vec4<u32>;};
 
-      struct Matrix {
+      struct  Matrix {
         numbers: array<f32>;
       };
 
