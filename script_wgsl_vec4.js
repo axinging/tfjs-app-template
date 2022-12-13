@@ -170,7 +170,9 @@ function makeUniformsDataView(device, sizeA, sizeB) {
   const passEncoder = commandEncoder.beginComputePass();
   passEncoder.setPipeline(computePipeline);
   passEncoder.setBindGroup(0, bindGroup);
-  passEncoder.dispatchWorkgroups(sizeA * sizeB /* x */, 1 /* y */);
+  const workPerThread = 4;
+  passEncoder.dispatchWorkgroups(
+      sizeA * sizeB / workPerThread /* x */, 1 /* y */);
   passEncoder.end();
 
   // Get a GPU buffer for reading in an unmapped state.
