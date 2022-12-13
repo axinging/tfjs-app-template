@@ -1,15 +1,15 @@
-export function getComputeShaderCodeWGSL(workGroupSize) { 
+export function getComputeShaderCodeWGSL(workGroupSize = [4, 1, 1]) {
   return `
-    [[block]] struct Uniforms { NAN : u32; xShape : vec4<u32>; wShape : vec4<u32>; outShape : vec4<u32>;};
+    struct Uniforms { NAN : u32, xShape : vec4<u32>, wShape : vec4<u32>, outShape : vec4<u32>,};
 
-    [[block]] struct Matrix {
-      numbers: array<f32>;
+    struct Matrix {
+      numbers: array<f32>,
     };
 
-    [[group(0), binding(0)]] var<storage, read> firstMatrix : Matrix;
-    [[group(0), binding(1)]] var<storage, read> secondMatrix : Matrix;
-    [[group(0), binding(2)]] var<storage, write> resultMatrix : Matrix;
-    [[group(0), binding(3)]] var<uniform> uniforms : Uniforms;
+    @group(0) @binding(0) var<storage, read> firstMatrix : Matrix;
+    @group(0) @binding(1) var<storage, read> secondMatrix : Matrix;
+    @group(0) @binding(2) var<storage, read_write> resultMatrix : Matrix;
+    @group(0) @binding(3) var<uniform> uniforms : Uniforms;
 
     fn vec4BoolToVec4F32(value : vec4<bool>) -> vec4<f32> {
       var res = vec4<f32>(0.0);
@@ -64,11 +64,24 @@ export function getComputeShaderCodeWGSL(workGroupSize) {
       resultMatrix.numbers[index] = value;
     }
 
-    [[stage(compute), workgroup_size(${workGroupSize[0]}, ${workGroupSize[1]}, ${workGroupSize[2]})]]
-    fn main([[builtin(global_invocation_id)]] globalId : vec3<u32>) {
+      /*
+      @compute @workgroup_size(workgroupSizeX, workgroupSizeY, workgroupSizeZ)
+
+      fn _start(@builtin(local_invocation_id) LocalId : vec3<u32>,
+                @builtin(global_invocation_id) GlobalId : vec3<u32>,
+                @builtin(local_invocation_index) LocalIndex: u32,
+                @builtin(workgroup_id) WorkgroupId : vec3<u32>,
+                @builtin(num_workgroups) NumWorkgroups : vec3<u32>) {
+      */ 
+    @compute @workgroup_size(${workGroupSize[0]}, ${
+      workGroupSize[1]}, ${workGroupSize[2]})
+    fn main(@builtin(global_invocation_id) globalId : vec3<u32>) {
       let index : u32 = globalId.x;
       let result = firstMatrix.numbers[index] + secondMatrix.numbers[index];
+      if (u32(result) == uniforms.NAN) {
+        mm_write(globalId, 0.0);
+      }
       mm_write(globalId, result);
     }
 `;
-  }
+}
