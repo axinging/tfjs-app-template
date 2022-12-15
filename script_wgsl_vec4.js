@@ -73,7 +73,7 @@ function makeUniforms(device, programUniform) {
   than the minimum binding size (64).
    */
   const uniformBuffer = acquireBuffer(
-      device, currentOffset * 4,
+      device, currentOffset,
       GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM);
   device.queue.writeBuffer(uniformBuffer, 0, arrayBuffer, 0, currentOffset);
 
@@ -198,5 +198,5 @@ function makeUniformsDataView(device, sizeA, sizeB) {
   // Read buffer.
   await gpuReadBuffer.mapAsync(GPUMapMode.READ);
   const arrayBuffer = gpuReadBuffer.getMappedRange();
-  console.log(new Float32Array(arrayBuffer));
+  console.log(JSON.stringify(new Float32Array(arrayBuffer)));
 })();
