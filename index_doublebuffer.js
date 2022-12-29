@@ -2,6 +2,30 @@ function predictFunction(input) {
   return model => model.predict(input);
 }
 
+async function warmup(model, predict) {
+  for (let i = 0; i < 50; i++) {
+    const result1 = predict(model);
+    const promiseRes1 = await result1.data();
+  }
+}
+
+async function modelDemo(model, predict) {
+  const times = [];
+  const numRuns = 50;
+  for (let i = 0; i < numRuns; i++) {
+    let start = performance.now();
+    console.log(performance.now().toFixed(2));
+    const result1 = predict(model);
+    const promiseRes1 = await result1.data();
+    const elapsedTime = performance.now() - start;
+
+    tf.dispose(result1);
+    times.push(elapsedTime);
+  }
+
+  const averageTime = times.reduce((acc, curr) => acc + curr, 0) / times.length;
+  console.log('average: ' + averageTime);
+}
 
 async function doubleBufferDemo(model, predict) {
   let promiseRes1, promiseRes2;
@@ -53,7 +77,7 @@ async function tripleBufferDemo(model, predict) {
     promiseRes2 = result2.data();
 
     const result3 = predict(model);
-    promiseRes3 = result2.data();
+    promiseRes3 = result3.data();
     await promiseRes1;
     await promiseRes2;
     let end = performance.now();
@@ -64,20 +88,37 @@ async function tripleBufferDemo(model, predict) {
   console.log(times + ', triple buffer averageTime: ' + averageTime.toFixed(2));
 }
 
-async function warmup(model, predict) {
-  for (let i = 0; i < 50; i++) {
-    // Warmup
-    const result1 = predict(model);
-    const promiseRes1 = await result1.data();
+let parallel = false;
+let bufferCount = 0;
+function getURLState(url) {
+  let params = new URLSearchParams(url);
+  const keys = [...params.keys()];
+  if (keys.length === 0) return null;
+  let parallel = false;
+  if (params.has('parallel')) {
+    parallel = params.get('parallel') == 'true' ? true : false;
   }
+  if (params.has('buffer')) {
+    bufferCount = Number(params.get('buffer'));
+  }
+  return;
 }
 
 async function main() {
-  const benchmark = benchmarks['FaceDetection'];  // DeepLabV3
+  const benchmark = benchmarks['MobileNetV3'];
   const model = await benchmark.load();
   const predict = benchmark.predictFunc();
   await warmup(model, predict);
-  await tripleBufferDemo(model, predict);
-  await doubleBufferDemo(model, predict);
-  await singleBufferDemo(model, predict);
+  const parallel = getURLState(location.search);
+  try {
+    tf.env().set('WEBGPU_PARALLEL_COMPILATION_PASS', parallel);
+  } catch {
+    console.warn('WEBGPU_PARALLEL_COMPILATION_PASS is not defined');
+  }
+  console.log('parallel is : ' + parallel + ', buffer count: ' + bufferCount);
+
+  if (bufferCount == 3) await tripleBufferDemo(model, predict);
+  if (bufferCount == 2) await doubleBufferDemo(model, predict);
+  if (bufferCount == 1) await singleBufferDemo(model, predict);
+  if (bufferCount == 0) await modelDemo(model, predict);
 }
