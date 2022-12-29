@@ -27,6 +27,23 @@ async function modelDemo(model, predict) {
   console.log('average: ' + averageTime);
 }
 
+async function singleBufferDemo(model, predict) {
+  let times = [];
+  for (let i = 0; i < 50; i++) {
+    let start = performance.now();
+    const result1 = predict(model);
+    const promiseRes1 = await result1.data();
+
+    const result2 = predict(model);
+    const promiseRes2 = await result2.data();
+    let end = performance.now();
+    times.push(Number((end - start).toFixed(2)));
+  }
+  const averageTime =
+      times.reduce((acc, curr) => acc + curr, 0) / (times.length * 2);
+  console.log(times + ', single buffer averageTime: ' + averageTime.toFixed(2));
+}
+
 async function doubleBufferDemo(model, predict) {
   let promiseRes1, promiseRes2;
   let times = [];
@@ -45,23 +62,6 @@ async function doubleBufferDemo(model, predict) {
   const averageTime =
       times.reduce((acc, curr) => acc + curr, 0) / (times.length * 2);
   console.log(times + ', double buffer averageTime: ' + averageTime.toFixed(2));
-}
-
-async function singleBufferDemo(model, predict) {
-  let times = [];
-  for (let i = 0; i < 50; i++) {
-    let start = performance.now();
-    const result1 = predict(model);
-    const promiseRes1 = await result1.data();
-
-    const result2 = predict(model);
-    const promiseRes2 = await result2.data();
-    let end = performance.now();
-    times.push(Number((end - start).toFixed(2)));
-  }
-  const averageTime =
-      times.reduce((acc, curr) => acc + curr, 0) / (times.length * 2);
-  console.log(times + ', single buffer averageTime: ' + averageTime.toFixed(2));
 }
 
 async function tripleBufferDemo(model, predict) {
@@ -88,34 +88,46 @@ async function tripleBufferDemo(model, predict) {
   console.log(times + ', triple buffer averageTime: ' + averageTime.toFixed(2));
 }
 
-let parallel = false;
-let bufferCount = 0;
+
 function getURLState(url) {
   let params = new URLSearchParams(url);
   const keys = [...params.keys()];
   if (keys.length === 0) return null;
   let parallel = false;
+  let batch = 0;
+  let bufferCount = 0;
   if (params.has('parallel')) {
     parallel = params.get('parallel') == 'true' ? true : false;
   }
   if (params.has('buffer')) {
     bufferCount = Number(params.get('buffer'));
   }
-  return;
+  if (params.has('batch')) {
+    batch = Number(params.get('batch'));
+  }
+  return [parallel, bufferCount, batch];
 }
 
 async function main() {
-  const benchmark = benchmarks['MobileNetV3'];
+  const benchmark = benchmarks['DeepLabV3'];  // MobileNetV3
   const model = await benchmark.load();
   const predict = benchmark.predictFunc();
   await warmup(model, predict);
-  const parallel = getURLState(location.search);
+  const [parallel, bufferCount, batch] = getURLState(location.search);
   try {
     tf.env().set('WEBGPU_PARALLEL_COMPILATION_PASS', parallel);
   } catch {
     console.warn('WEBGPU_PARALLEL_COMPILATION_PASS is not defined');
   }
-  console.log('parallel is : ' + parallel + ', buffer count: ' + bufferCount);
+
+  try {
+    if (batch != 0) tf.env().set('WEBGPU_DEFERRED_SUBMIT_BATCH_SIZE', batch);
+  } catch {
+    console.warn('WEBGPU_DEFERRED_SUBMIT_BATCH_SIZE is not defined');
+  }
+  console.log(
+      'parallel is : ' + parallel + ', buffer count: ' + bufferCount +
+      ', batch : ' + batch);
 
   if (bufferCount == 3) await tripleBufferDemo(model, predict);
   if (bufferCount == 2) await doubleBufferDemo(model, predict);
