@@ -2,38 +2,6 @@ function predictFunction(input) {
   return model => model.predict(input);
 }
 
-const benchmarks2 = {
-  'MobileNetV3': {
-    type: 'GraphModel',
-    architectures: ['small_075', 'small_100', 'large_075', 'large_100'],
-    load: async (inputResolution = 224, modelArchitecture = 'small_075') => {
-      const url = `https://tfhub.dev/google/tfjs-model/imagenet/mobilenet_v3_${
-          modelArchitecture}_224/classification/5/default/1`;
-      return tf.loadGraphModel(url, {fromTFHub: true});
-    },
-    predictFunc: () => {
-      const input = tf.randomNormal([1, 224, 224, 3]);
-      return predictFunction(input);
-    },
-  },
-  'DeepLabV3': {
-    type: 'GraphModel',
-    // TODO: Add cityscapes architecture.
-    // https://github.com/tensorflow/tfjs/issues/6733
-    architectures: ['pascal', 'ade20k'],
-    load: async (inputResolution = 227, modelArchitecture = 'pascal') => {
-      const url =
-          `https://storage.googleapis.com/tfhub-tfjs-modules/tensorflow/tfjs-model/deeplab/${
-              modelArchitecture}/1/quantized/2/1/model.json`;
-      return tf.loadGraphModel(url);
-    },
-    predictFunc: () => {
-      const input = tf.zeros([1, 227, 500, 3], 'int32');
-      return predictFunction(input);
-    },
-  },
-};
-
 
 async function doubleBufferDemo(model, predict) {
   let promiseRes1, promiseRes2;

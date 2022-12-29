@@ -13,19 +13,15 @@ limitations under the License.
 <html>
 
 <head>
-    <title>TensorFlow.js Op demo</title>
+    <title>TensorFlow.js Double Buffer demo</title>
 </head>
 
 <body>
-    <h2>TensorflowJS Model demo</h2>
+    <h2>Please include loader.js and model_config.js from https://github.com/tensorflow/tfjs/tree/master/e2e/benchmarks</h2>
     <script src="loader.js"></script>
-    <script src="index_doublebuffer.js"></script>-->
-    <br>
-    <button id="mainTest">Main Test</button>
-    <br><br>
+    <script src="index_doublebuffer.js"></script>
     <script>
         'use strict';
-
 
         (async function () {
             let localBuild = ['core', 'webgpu', 'webgl', 'tfjs-converter'];
