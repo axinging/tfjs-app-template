@@ -28,9 +28,11 @@ async function warmup(model, predict) {
   }
 }
 
+const TEST_COUNT = 150;
+
 async function modelDemo(model, predict) {
   const times = [];
-  const numRuns = 50;
+  const numRuns = TEST_COUNT;
   for (let i = 0; i < numRuns; i++) {
     let start = performance.now();
     console.log(performance.now().toFixed(2));
@@ -48,7 +50,8 @@ async function modelDemo(model, predict) {
 
 async function singleBufferDemo(model, predict) {
   let times = [];
-  for (let i = 0; i < 75; i++) {
+  const WORK_PER_LOOP = 2;
+  for (let i = 0; i < TEST_COUNT / WORK_PER_LOOP; i++) {
     let start = performance.now();
     const result1 = predict(model);
     const promiseRes1 = await result1.data();
@@ -58,15 +61,16 @@ async function singleBufferDemo(model, predict) {
     let end = performance.now();
     times.push(Number((end - start).toFixed(2)));
   }
-  const averageTime =
-      times.reduce((acc, curr) => acc + curr, 0) / (times.length * 2);
+  const averageTime = times.reduce((acc, curr) => acc + curr, 0) /
+      (times.length * WORK_PER_LOOP);
   console.log(times + ', single buffer averageTime: ' + averageTime.toFixed(2));
 }
 
 async function doubleBufferDemo(model, predict) {
-  let promiseRes = new Array(2);
+  const WORK_PER_LOOP = 2;
+  let promiseRes = new Array(WORK_PER_LOOP);
   let times = [];
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < TEST_COUNT / WORK_PER_LOOP; i++) {
     let start = performance.now();
     await promiseRes[promiseRes.length - 1];
     const result1 = predict(model);
@@ -78,8 +82,8 @@ async function doubleBufferDemo(model, predict) {
     let end = performance.now();
     times.push(Number((end - start).toFixed(2)));
   }
-  const averageTime =
-      times.reduce((acc, curr) => acc + curr, 0) / (times.length * 2);
+  const averageTime = times.reduce((acc, curr) => acc + curr, 0) /
+      (times.length * WORK_PER_LOOP);
   console.log(times + ', double buffer averageTime: ' + averageTime.toFixed(2));
 }
 
@@ -111,7 +115,7 @@ async function main() {
   const benchmark = benchmarks['MobileNetV3'];  // MobileNetV3,DeepLabV3
   const model = await benchmark.load();
   const predict = benchmark.predictFunc();
-  // await warmup(model, predict);
+  await warmup(model, predict);
   const [parallel, bufferCount, batch] = getURLState(location.search);
   try {
     tf.env().set('WEBGPU_PARALLEL_COMPILATION_PASS', parallel);
@@ -133,5 +137,6 @@ async function main() {
   else if (bufferCount == 0)
     await modelDemo(model, predict);
   else
-    await tripleBufferDemo(model, predict, bufferCount, 150 / bufferCount);
+    await tripleBufferDemo(
+        model, predict, bufferCount, TEST_COUNT / bufferCount);
 }
