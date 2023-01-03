@@ -1,3 +1,22 @@
+function getURLState(url) {
+  let params = new URLSearchParams(url);
+  const keys = [...params.keys()];
+  if (keys.length === 0) return null;
+  let parallel = false;
+  let batch = 0;
+  let bufferCount = 0;
+  if (params.has('parallel')) {
+    parallel = params.get('parallel') == 'true' ? true : false;
+  }
+  if (params.has('buffer')) {
+    bufferCount = Number(params.get('buffer'));
+  }
+  if (params.has('batch')) {
+    batch = Number(params.get('batch'));
+  }
+  return [parallel, bufferCount, batch];
+}
+
 function predictFunction(input) {
   return model => model.predict(input);
 }
@@ -29,7 +48,7 @@ async function modelDemo(model, predict) {
 
 async function singleBufferDemo(model, predict) {
   let times = [];
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 75; i++) {
     let start = performance.now();
     const result1 = predict(model);
     const promiseRes1 = await result1.data();
@@ -45,17 +64,17 @@ async function singleBufferDemo(model, predict) {
 }
 
 async function doubleBufferDemo(model, predict) {
-  let promiseRes1, promiseRes2;
+  let promiseRes = new Array(2);
   let times = [];
   for (let i = 0; i < 50; i++) {
     let start = performance.now();
-    await promiseRes2;
+    await promiseRes[promiseRes.length - 1];
     const result1 = predict(model);
-    promiseRes1 = result1.data();
+    promiseRes[0] = result1.data();
 
     const result2 = predict(model);
-    promiseRes2 = result2.data();
-    await promiseRes1;
+    promiseRes[1] = result2.data();
+    await promiseRes[0];
     let end = performance.now();
     times.push(Number((end - start).toFixed(2)));
   }
@@ -64,55 +83,35 @@ async function doubleBufferDemo(model, predict) {
   console.log(times + ', double buffer averageTime: ' + averageTime.toFixed(2));
 }
 
-async function tripleBufferDemo(model, predict) {
-  let promiseRes1, promiseRes2, promiseRes3;
+async function tripleBufferDemo(
+    model, predict, bufferCount, runs, comment = '') {
+  let promiseRes = new Array(bufferCount);
   let times = [];
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < runs; i++) {
     let start = performance.now();
-    await promiseRes3;
-    const result1 = predict(model);
-    promiseRes1 = result1.data();
-
-    const result2 = predict(model);
-    promiseRes2 = result2.data();
-
-    const result3 = predict(model);
-    promiseRes3 = result3.data();
-    await promiseRes1;
-    await promiseRes2;
+    await promiseRes[promiseRes.length - 1];
+    for (let j = 0; j < bufferCount; j++) {
+      const result1 = predict(model);
+      promiseRes[j] = result1.data();
+      // tf.dispose(result1);
+    }
+    for (let j = 0; j < bufferCount - 1; j++) {
+      await promiseRes[j];
+    }
     let end = performance.now();
     times.push(Number((end - start).toFixed(2)));
   }
   const averageTime =
-      times.reduce((acc, curr) => acc + curr, 0) / (times.length * 3);
-  console.log(times + ', triple buffer averageTime: ' + averageTime.toFixed(2));
-}
-
-
-function getURLState(url) {
-  let params = new URLSearchParams(url);
-  const keys = [...params.keys()];
-  if (keys.length === 0) return null;
-  let parallel = false;
-  let batch = 0;
-  let bufferCount = 0;
-  if (params.has('parallel')) {
-    parallel = params.get('parallel') == 'true' ? true : false;
-  }
-  if (params.has('buffer')) {
-    bufferCount = Number(params.get('buffer'));
-  }
-  if (params.has('batch')) {
-    batch = Number(params.get('batch'));
-  }
-  return [parallel, bufferCount, batch];
+      times.reduce((acc, curr) => acc + curr, 0) / (times.length * bufferCount);
+  console.log(
+      times + `, ${comment} ${bufferCount} buffers: ` + averageTime.toFixed(2));
 }
 
 async function main() {
-  const benchmark = benchmarks['DeepLabV3'];  // MobileNetV3
+  const benchmark = benchmarks['MobileNetV3'];  // MobileNetV3,DeepLabV3
   const model = await benchmark.load();
   const predict = benchmark.predictFunc();
-  await warmup(model, predict);
+  // await warmup(model, predict);
   const [parallel, bufferCount, batch] = getURLState(location.search);
   try {
     tf.env().set('WEBGPU_PARALLEL_COMPILATION_PASS', parallel);
@@ -129,8 +128,10 @@ async function main() {
       'parallel is : ' + parallel + ', buffer count: ' + bufferCount +
       ', batch : ' + batch);
 
-  if (bufferCount == 3) await tripleBufferDemo(model, predict);
-  if (bufferCount == 2) await doubleBufferDemo(model, predict);
-  if (bufferCount == 1) await singleBufferDemo(model, predict);
-  if (bufferCount == 0) await modelDemo(model, predict);
+  if (bufferCount == 1)
+    await singleBufferDemo(model, predict);
+  else if (bufferCount == 0)
+    await modelDemo(model, predict);
+  else
+    await tripleBufferDemo(model, predict, bufferCount, 150 / bufferCount);
 }
